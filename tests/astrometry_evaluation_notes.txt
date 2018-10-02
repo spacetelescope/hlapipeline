@@ -1,0 +1,175 @@
+These notes are intended to provide all the necessary details required to start
+evaluating the impact of the new 'a priori' astrometrics solutions based on
+GAIA-updated guide star positions.  Basic observations, which you may already
+be familiar with, are also included to insure that the full logic behind the 
+notes are understood.  Please accept my apologies now if this some of this
+information seems a little too basic.
+
+Overview
+=========
+The process of preparing the data for evaluating these new solutions requires 
+the following initial steps:
+  * Identifying suitable test data for evaluation
+    => suitable data includes observations of fields of view which are well 
+       calibrated for the instrument
+    => test data could also include observations which overlap to form mosaics
+    => test data may also include observations which overlap images from other
+       instruments
+  * Acquiring selected test data from the archive
+    => unedited data straight from the archive will represent the current state
+       of pipeline processing
+    => keeping an unedited copy of this test data will allow for iteration of 
+       various processing steps
+  * Updating test data observations with new solutions from the astrometric 
+    database
+    => this update will only APPEND the new solutions as additional extensions
+       in the observations FITS file, with each extension containing
+       the entire new headerlet with a new solution
+  * Replacing the PRIMARY (or active) WCS in the SCI header with the new 
+    astrometric solution
+
+    
+Available Datasets
+===================
+Datasets initially updated with the new GAIA-based guide star corrections
+include observations which start with the following OBSET program IDs:
+  * ic40
+  * jddh
+  * j961
+  * j8bo
+  * j8mb
+  * ib6v
+  * icb0
+  * iaal
+
+NOTE: Additional datasets have also been updated with new astrometric solutions, but 
+these are guaranteed to have new solutions.  Brian McLean can provide details 
+on additional datasets upon request.
+
+The only ACS and WFC3 files which need to be copied from the archive for 
+updating would be:
+  * FLC (*_flc.fits) files
+  * FLT (*_flt.fits) files
+  
+These are the fully calibrated inputs to the Drizzle processing in the pipeline,
+and are used as inputs for creating mosaics.  
+
+
+Updating the WCS
+=================
+The following set of Python commands can be used to extract the new solutions
+from the astrometry database and append them to each observation.  
+
+>>> from stwcs.updatewcs import astrometry_utils as stwcsau
+>>> import glob
+>>> fnames = sorted(glob.glob('*flc.fits'))
+>>> db = stwcsau.AstrometryDB(write_log=True)
+>>> for f in fnames:  db.updateObs(f)
+
+You can then check to see what new headerlets with new WCS solutions were added
+to each of the observations with:
+
+>>> from stwcs.wcsutil import headerlet
+>>> for f in fnames: headerlet.headerlet_summary(f)
+
+
+Documentation
+--------------
+More details about the astrometry interface can be found at:
+
+    http://stwcs.readthedocs.io/en/latest/astrometry_utils.html
+
+More details about the headerlet interface can be found at:
+
+    http://stwcs.readthedocs.io/en/latest/headerlet.html
+
+
+WCS Naming
+-----------
+The function 'headerlet_summary' will report not only all the extensions which
+contain headerlets (new WCSs), but also provide information about the WCS solution
+in each headerlet.  The output for a single observation will look something like:
+
+Headerlets for jddh02goq_flc.fits
+EXTN    HDRNAME                                                                 WCSNAME                                                       DISTNAME                                 AUTHOR      DATE                 SIPNAME              NPOLFILE                 D2IMFILE                 DESCRIP  
+8       IDC_11d1433lj                                                           IDC_11d1433lj                                                 jddh02goq_11d1433lj-02c14517j-02c1450oj              2018-06-24T01:15:16  jddh02goq_11d1433lj  jref$02c14517j_npl.fits  jref$02c1450oj_d2i.fits           
+9       OPUS2018-06-24                                                          OPUS                                                          jddh02goq_11d1433lj-02c14517j-02c1450oj              2018-06-24T01:15:19  jddh02goq_11d1433lj  jref$02c14517j_npl.fits  jref$02c1450oj_d2i.fits           
+10      jddh02goq_OPUS-GUIDESTAR-FINE-jddh02goq-GSC23-GSC240-2018.1.0           OPUS-GUIDESTAR-FINE-jddh02goq-GSC23-GSC240-2018.1.0           jddh02goq_11d1433lj-02c14517j-02c1450oj  STScI/MAST  2018-07-09T00:40:25  jddh02goq_11d1433lj  jref$02c14517j_npl.fits  jref$02c1450oj_d2i.fits           
+11      jddh02goq_IDC_11d1433lj-GUIDESTAR-FINE-jddh02goq-GSC23-GSC240-2018.1.0  IDC_11d1433lj-GUIDESTAR-FINE-jddh02goq-GSC23-GSC240-2018.1.0  jddh02goq_11d1433lj-02c14517j-02c1450oj  STScI/MAST  2018-07-09T00:40:35  jddh02goq_11d1433lj  jref$02c14517j_npl.fits  jref$02c1450oj_d2i.fits           
+
+The most important field in this output might arguably be the "HDRNAME".  The 
+new solutions will very extensive names designed to provide as full a description
+about the new solution as possible.  In this case, the solution in EXTN=11 has a 
+HDRNAME of:
+
+    jddh02goq_IDC_11d1433lj-GUIDESTAR-FINE-jddh02goq-GSC23-GSC240-2018.1.0
+ 
+The names are defined with the fields:
+    <rootname>_<pipeline WCSNAME>-<pointing mode>-<rootname>-<orig GS catalog>-<New GS catalog>-<build number>
+
+Every WCS comes with it's own name using the FITS-standard WCSNAME* keyword in
+the header as the label. Multiple WCS's are associated using WCS key values which
+use single letters as the ID.  For example, 
+  * WCSNAME, CRVAL1, CRVAL2, CRPIX1, CRPIX2, CD1_1, CD1_2, CD2_1, CD2_2,...
+     => These FITS keywords describe the PRIMARY or active WCS 
+  * WCSNAMEA, CRVAL1A, CRVAL2A, CRPIX1A, CRPIX2A, CD1_1A, CD1_2A, CD2_1A, CD2_2A,...
+     => These FITS keywords describe the 'A' WCS or first alternate WCS
+  * WCSNAMEO, CRVAL1O, CRVAL2O, CRPIX1O, CRPIX2O, CD1_1O, CD1_2O, CD2_1O, CD2_2O,...
+     => These FITS keywords describe the "O" (OPUS or original) WCS defined by 
+        Generic conversion before applying the instrument's distortion model
+All WCS solutions in the header at the same time MUST use the same set of 
+distortion model reference files.  
+Headerlets may have different distortion models.  
+  
+  
+Applying the new WCS
+=====================
+The new solutions will be appended as a new extension to the FITS file for the
+observation.  However, the SCI extension will still be using the same WCS defined
+by the pipeline.  So, one further step will need to be taken to replace the 
+pipeline-defined WCS with the new WCS of your choosing.
+
+>>> for f in fnames:  
+...     headerlet.restore_from_headerlet(f,hdrext=11,archive=True,force=True,logging=True)
+
+This command will apply the headerlet found in EXTN 11 (in this example) as the 
+new PRIMARY (or active) WCS in the observation.  The parameter 'archive' tells the
+function to make sure headerlets exist for the solution or solutions which are 
+being replaced so that they can be restored as needed.  The parameter 'force' 
+tells the code to replace the WCS and distortion model even if the distortion
+model information is different.  
+
+
+Start Evaluating
+=================
+At this point, the observations should be using the new GAIA-derived WCS solutions
+and should be ready for evaluation.  My own evaluations involved using 'tweakreg'
+to fit the updated exposures to a catalog of GAIA-based astrometric sources.
+Extracting a catalog of GAIA coordinates from the GSC web-service is not trivial, 
+so I developed a module which defines a single function call to generate such a
+catalog.  The accompanying module can be placed somewhere in your PYTHONPATH for 
+use with the following command:
+
+>>> import astrometric_utils as catau
+>>> catau.create_astrometric_catalog(fnames, output='ref_47Tuc.cat')
+
+NOTE: This module requires stwcs, Astropy, photutils, and scipy (among other 
+more basic Python modules) to be installed.  All should be available or installed
+in the current Conda-based environment for HST as described at:
+
+    http://astroconda.readthedocs.io/en/latest/releases.html#pipeline-install
+    
+
+This command will then return the full set of sources from the GSC 2.4.1.2 catalog 
+for a cone that covers the field-of-view for all the observations listed in 
+'fnames'.  The catalog will then get written out to a file named 'ref_47Tuc.cat'
+where this example applies to observations of 47Tuc.  The parameter 'gaia_only' 
+would limit the contents of the catalog to only sources found in the GAIA catalog 
+itself, rather than including sources which have been bootstrapped from GSC 
+plates or Hubble Source Catalog (HSC) positions.  
+
+This catalog can then be provided as a reference catalog in the 'refcat' parameter
+in 'tweakreg' or input to DS9 as a region file ('Region'->'Load Region', then 
+select 'xy' type with 'icrs' and 'degrees' for the units). 
+
+
