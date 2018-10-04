@@ -14,7 +14,6 @@ reference catalog.
 
 """
 import os
-import io
 from io import BytesIO
 
 import csv
@@ -29,6 +28,7 @@ from stsci.tools import fileutil as fu
 from stsci.tools import parseinput
 
 from astropy import units as u
+from astropy.table import Table
 from astropy.coordinates import SkyCoord
 from astropy.io import fits as pf
 from astropy.io import ascii
@@ -51,6 +51,10 @@ if ASTROMETRIC_CAT_ENVVAR in os.environ:
 else:
     SERVICELOCATION = DEF_CAT_URL
 
+ISOLATION_LIMIT = 0.55
+
+__all__ = ['create_astrometric_catalog', 'compute_radius', 'find_gsc_offset',
+            'extract_sources', 'find_isolated_source', 'find_best_offset']
 
 def create_astrometric_catalog(inputs, **pars):
     """Create an astrometric catalog that covers the inputs' field-of-view.
@@ -67,7 +71,8 @@ def create_astrometric_catalog(inputs, **pars):
 
     output : str, optional
         Filename to give to the astrometric catalog read in from the master
-        catalog web service.  Default: ref.cat
+        catalog web service.  If 'None', no file will be written out.
+        Default: ref.cat
 
     gaia_only : bool, optional
         Specify whether or not to only use sources from GAIA in output catalog
@@ -76,11 +81,18 @@ def create_astrometric_catalog(inputs, **pars):
     note ::
         This function will point to astrometric catalog web service defined
         through the use of the ASTROMETRIC_CATALOG_URL environment variable.
+
+    Returns
+    =======
+    ref_table : object
+        Astropy Table object of the catalog
+
     """
     # interpret input parameters
     catalog = pars.get("catalog", 'GSC241')
-    output = pars.get("output", 'ref.cat')
+    output = pars.get("output", 'ref_cat.ecsv')
     gaia_only = pars.get("gaia_only", False)
+    table_format = pars.get("table_format", 'ascii.ecsv')
 
     inputs, _ = parseinput.parseinput(inputs)
     # start by creating a composite field-of-view for all inputs
@@ -101,25 +113,33 @@ def create_astrometric_catalog(inputs, **pars):
 
     # perform query for this field-of-view
     ref_dict = get_catalog(ra, dec, sr=radius, catalog=catalog)
-    row = "{:14.8f}  {:14.8f}  {:8.4f} {} {}\n"
-    num_sources = 0
-    with open(output, 'w') as refcat:
-        refcat.write("#ra  dec   mag   objID   GaiaID\n")
-        for source in ref_dict:
-            if 'GAIAsourceID' in source:
-                g = source['GAIAsourceID']
-                if gaia_only and g.strip() is '':
-                    continue
-            else:
-                g = -1  # indicator for no source ID extracted
-            r = float(source['ra'])
-            d = float(source['dec'])
-            m = float(source['mag'])
-            o = source['objID']
-            refcat.write(row.format(r, d, m, o, g))
-            num_sources += 1
+    colnames = ('ra','dec', 'mag', 'objID', 'GaiaID')
+    col_types = ('f8', 'f8', 'f4', 'U25', 'U25')
+    ref_table = Table(names = colnames, dtype=col_types)
 
+    # extract just the columns we want...
+    num_sources = 0
+    for source in ref_dict:
+        if 'GAIAsourceID' in source:
+            g = source['GAIAsourceID']
+            if gaia_only and g.strip() is '':
+                continue
+        else:
+            g = -1  # indicator for no source ID extracted
+        r = float(source['ra'])
+        d = float(source['dec'])
+        m = float(source['mag'])
+        o = source['objID']
+        num_sources += 1
+        ref_table.add_row((r,d,m,o,g))
+
+    # Write out table to a file, if specified
+    if output:
+        ref_table.write(output, format=table_format)
     print("Created catalog '{}' with {} sources".format(output, num_sources))
+
+    return ref_table
+
 
 def get_catalog(ra, dec, sr=0.1, fmt='CSV', catalog='GSC241'):
     """ Extract catalog from VO web service.
@@ -344,7 +364,7 @@ def within_footprint(img, wcs, x, y):
 
 
 def find_best_offset(image, wcs, reference, refnames=['ra', 'dec'],
-                     match_tolerance=5.):
+                     match_tolerance=5., isolation_limit = ISOLATION_LIMIT):
     """Iteratively look for the best cross-match between the catalog and ref.
 
     Parameters
@@ -371,6 +391,12 @@ def find_best_offset(image, wcs, reference, refnames=['ra', 'dec'],
             an astrometric catalog position.  Larger values allow for lower
             accuracy source positions to be compared to astrometric catalog
             Default: 5 pixels
+
+        isolation_limit : float
+            Fractional value (0-1.0) of distance from most isolated source to
+            next source to use as limit on overlap for source matching.
+            Default: 0.55
+
     Returns
     -------
         best_offset : tuple
@@ -385,7 +411,6 @@ def find_best_offset(image, wcs, reference, refnames=['ra', 'dec'],
         refcat = reference
     ref_ra = refcat[refnames[0]]
     ref_dec = refcat[refnames[1]]
-    reftab = np.column_stack((ref_ra, ref_dec))
     xref, yref = wcs.all_world2pix(ref_ra, ref_dec, 1)
 
     # look for the most isolated reference source to serve as a
@@ -398,10 +423,7 @@ def find_best_offset(image, wcs, reference, refnames=['ra', 'dec'],
     print("  with separation from neighbor of: {}".format(iso_dist))
 
     # compute match limit based on distance to neighbor
-    #  WARNING ::
-    #  hard-coded limit: 55% from isolated source to neighbor
-    #  This allows for a little overlap in areas searched for matches
-    match_limit = iso_dist*0.55
+    match_limit = iso_dist*isolation_limit
 
     # find sources in image
     seg_cat, segmap = extract_sources(image)
