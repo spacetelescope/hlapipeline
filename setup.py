@@ -11,11 +11,15 @@ with open('README.rst') as readme_file:
 with open('HISTORY.rst') as history_file:
     history = history_file.read()
 
-requirements = ['Click>=6.0', ]
+requirements = ['Click>=6.0', 'astropy', 'scipy', 'matplotlib', \
+                'photutils', 'pyyaml', \
+                'scipy', 'sphinx','sphinx_rtd_theme', \
+                'stsci_rtd_theme','stsci.tools',\
+                'stwcs','setuptools']
 
 setup_requirements = ['pytest-runner', ]
 
-test_requirements = ['pytest', ]
+test_requirements = ['pytest', 'requests_mock', 'ci_watson']
 
 setup(
     author="Warren J. Hack",
@@ -45,7 +49,7 @@ setup(
     include_package_data=True,
     keywords='hlapipeline',
     name='hlapipeline',
-    packages=find_packages(include=['hlapipeline']),
+    packages=find_packages(),
     setup_requires=setup_requirements,
     test_suite='tests',
     tests_require=test_requirements,

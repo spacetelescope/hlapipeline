@@ -33,6 +33,7 @@ class BaseTest(object):
 
     # To be defined by individual test
     subdir = ''
+    curdir = ''
 
     @pytest.fixture(autouse=True)
     def setup_class(self, tmpdir, envopt):
@@ -42,10 +43,11 @@ class BaseTest(object):
         """
         # create working directory specified for the test
         if not tmpdir.ensure(self.subdir, dir=True):
-            p = tmpdir.mkdir(self.subdir).strpath
+            curdir = tmpdir.mkdir(self.subdir).strpath
         else:
-            p = tmpdir.join(self.subdir).strpath
-        os.chdir(p)
+            curdir = tmpdir.join(self.subdir).strpath
+        os.chdir(curdir)
+        self.curdir = curdir
 
         # This controls astropy.io.fits timeout
         conf.remote_timeout = self.timeout

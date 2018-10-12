@@ -10,21 +10,20 @@ CONDA_ARGS = "-y -q -c ${CONDA_CHANNEL}"
 CONDA_CREATE = "conda create ${CONDA_ARGS}"
 CONDA_INST = "conda install ${CONDA_ARGS}"
 PY_SETUP = "python setup.py"
-PYTEST = "pytest --basetemp=tests_output --junitxml results.xml --bigdata --remote-data=any"
+PYTEST = "pytest --basetemp=tests_output --junitxml results.xml --bigdata"
 
 // The minimum modules required to execute setup.py at all
-BASE_DEPS = "astropy numpy"
-TEST_DEPS = "pytest pytest-remotedata crds"
+BASE_DEPS = "astropy numpy pyyaml"
+TEST_DEPS = "pytest pytest-remotedata stwcs git+https://github.com/stsci-hack/ci_watson.git@fix_logic_in_compare"
 
 // Conda needs explicit dependencies listed
-DEPS = "fitsblender graphviz nictools numpydoc \
-        pytest pytest-remotedata pyregion \
-        scipy spherical-geometry sphinx sphinx_rtd_theme \
-        stsci_rtd_theme stsci.convolve stsci.image \
-        stsci.imagemanip stsci.imagestats stsci.ndimage \
-        stsci.skypac stsci.stimage stwcs setuptools python"
+DEPS = "fitsblender graphviz nictools numpydoc matplotlib drizzlepac\
+        pytest pytest-remotedata photutils \
+        scipy sphinx sphinx_rtd_theme \
+        stsci_rtd_theme stsci.tools\
+        stwcs setuptools python"
 
-matrix_python = ["3.6", "3.7"]
+matrix_python = ["3.6"]
 matrix_astropy = [">=3.0.5"]
 matrix_numpy = [">=1.14", "==1.15.0rc1"]
 matrix = []
@@ -78,10 +77,12 @@ for (numpy_ver in matrix_numpy) {
     install.nodetype = "linux"
     install.name = MATRIX_TITLE
     install.env_vars = ['BUILD_MATRIX_SUFFIX=' + MATRIX_SUFFIX,
-                        'BUILD_MATRIX_ID=' + matrix_id]
+                        'BUILD_MATRIX_ID=' + matrix_id,
+                        'HOME=./',
+                        'TEST_BIGDATA=https://bytesalad.stsci.edu/artifactory']
     install.build_cmds = [
         // Install python @ version
-        "${CONDA_CREATE} -n ${python_ver} ${DEPS_PYTHON}",
+        "${CONDA_CREATE} -n ${python_ver} ${DEPS_PYTHON} stsci-hst",
 
         // Install custom required packages @ version
         "${WRAPPER} ${PIP_INST} ${DEPS_EX}",

@@ -1,5 +1,6 @@
 import os
 import pytest
+import math
 
 from astropy.io import fits
 
@@ -7,8 +8,12 @@ import numpy as np
 import stwcs
 from stsci.tools import fileutil
 
-from ci_watson.artifactory_helpers import check_url, get_bigdata_root
+from ci_watson.artifactory_helpers import get_bigdata_root
 from ci_watson.hst_helpers import raw_from_asn, ref_from_image, download_crds
+try:
+    from ci_watson.artifactory_helpers import check_url
+except ImportError:
+    from ci_watson.artifactory_helpers import _is_url as check_url
 
 from base_classes import BaseTest
 
@@ -45,7 +50,7 @@ class BaseHLATest(BaseTest):
         # HSTCAL cannot open remote CRDS on FTP but central storage is okay.
         # So use central storage if available to avoid FTP.
         if self.prevref is None or self.prevref.startswith(('ftp', 'http')):
-            os.environ[self.refstr] = os.getwcd() + os.sep
+            os.environ[self.refstr] = self.curdir + os.sep
             self.use_ftp_crds = True
 
         # Turn off Astrometry updates
@@ -73,8 +78,15 @@ class BaseHLATest(BaseTest):
                 continue
             if refsep not in ref_file:  # Local file
                 self.get_data('customRef', ref_file, docopy=docopy)
-            else:  # Download from FTP, if applicable
-                if self.use_ftp_crds:
+            else:
+                # Start by checking to see whether IRAF variable *ref/*tab
+                # has been added to os.environ
+                refdir, refname = ref_file.split(refsep)
+                if refdir not in os.environ or os.environ[refdir] != self.curdir+os.sep:
+                    os.environ[refdir] = self.curdir + os.sep
+
+                # Download from FTP, if applicable
+                if self.use_ftp_crds and refname not in os.listdir(self.curdir):
                     download_crds(ref_file, timeout=self.timeout)
         return filename
 

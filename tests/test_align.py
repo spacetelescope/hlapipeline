@@ -1,3 +1,4 @@
+import os
 import pytest
 from astropy.table import Table
 
@@ -46,6 +47,7 @@ class TestAlignMosaic(BaseHLATest):
           * Input exposures include both ACS and WFC3 images of the same general field-of-view
             of NGC188 suitable for creating a combined mosaic using both instruments.
         """
+        self.curdir = os.getcwd()
 
         for infile in self.input_filenames:
             self.get_input_file(infile, docopy=True)
@@ -72,6 +74,7 @@ class TestAlignMosaic(BaseHLATest):
                                 'jddh02gjq_flc.fits','jddh02glq_flc.fits',
                                 'jddh02goq_flc.fits']
         self.input_loc = 'mosaic_47tuc'
+        self.curdir = os.getcwd()
 
         for infile in self.input_filenames:
             self.get_input_file(infile, docopy=True)

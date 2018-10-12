@@ -1,6 +1,4 @@
-import os
-
-from .utils import astrometric_utils
+import hlapipeline.utils.astrometric_utils as hlautils
 
 from drizzlepac import tweakreg
 
@@ -14,13 +12,17 @@ def align(expnames, **kwargs):
 
     """
     shift_name = kwargs.get('shift_name','shifts_gaia.txt')
+    ref_cat_file = kwargs.get('output', None)
+    # Set default values for specific Tweakreg parameters which are more
+    # appropriate for most of our use cases
     updatehdr = kwargs.get('updatehdr', False)
     wcsname = kwargs.get('wcsname', "TWEAK_GAIA")
     searchrad = kwargs.get('searchrad', 15.0)
     searchunits = kwargs.get('searchunits', 'arcseconds')
-    ref_cat_file = kwargs.get('output', None)
+    threshold = kwargs.get('threshold', 1000.0)
+    conv_width = kwargs.get('conv_width', 3.5)
 
-    gaia_catalog = astrometric_utils.create_astrometric_catalog(expnames, **kwargs)
+    gaia_catalog = hlautils.create_astrometric_catalog(expnames, **kwargs)
     gaia_catalog.write(ref_cat_file, format='ascii.no_header')
 
     if len(gaia_catalog) > 6:
@@ -35,6 +37,8 @@ def align(expnames, **kwargs):
                       see2dplot=False,
                       updatehdr=updatehdr,
                       wcsname=wcsname,
+                      threshold=threshold,
+                      conv_width=conv_width,
                       outshifts=shift_name,
                       outwcs = shift_name.replace('.txt','_wcs.fits'),
                       refcat=ref_cat_file,
