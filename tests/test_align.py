@@ -33,12 +33,8 @@ class TestAlignMosaic(BaseHLATest):
                 with the current version of `tweakreg`.
 
     """
-    input_loc = 'mosaic_ngc188'
+
     ref_loc = ['truth']
-    input_filenames = ['iaal01hxq_flc.fits', 'iaala3btq_flc.fits',
-                       'iaal01hyq_flc.fits', 'iaala3bsq_flc.fits',
-                       'j8boa1m8q_flc.fits', 'j8boa1m4q_flc.fits',
-                       'j8boa1maq_flc.fits', 'j8boa1m6q_flc.fits']
 
     def test_align_ngc188(self):
         """ Verify whether NGC188 exposures can be aligned to an astrometric standard.
@@ -47,14 +43,19 @@ class TestAlignMosaic(BaseHLATest):
           * Input exposures include both ACS and WFC3 images of the same general field-of-view
             of NGC188 suitable for creating a combined mosaic using both instruments.
         """
+        self.input_loc = 'mosaic_ngc188'
+        input_filenames = ['iaal01hxq_flc.fits', 'iaala3btq_flc.fits',
+                            'iaal01hyq_flc.fits', 'iaala3bsq_flc.fits',
+                            'j8boa1m8q_flc.fits', 'j8boa1m4q_flc.fits',
+                            'j8boa1maq_flc.fits', 'j8boa1m6q_flc.fits']
         self.curdir = os.getcwd()
 
-        for infile in self.input_filenames:
+        for infile in input_filenames:
             self.get_input_file(infile, docopy=True)
             updatewcs.updatewcs(infile)
 
         output_shift_file = 'test_mosaic_ngc188_shifts.txt'
-        align_to_gaia.align(self.input_filenames, shift_name=output_shift_file)
+        align_to_gaia.align(input_filenames, shift_name=output_shift_file)
 
         shift_file = Table.read(output_shift_file, format='ascii')
         rms_x = max(shift_file['col6'])
@@ -63,25 +64,25 @@ class TestAlignMosaic(BaseHLATest):
         assert (rms_x <= 0.25 and rms_y <= 0.25)
 
     def test_align_47tuc(self):
-        """ Verify whether NGC188 exposures can be aligned to an astrometric standard.
+        """ Verify whether 47Tuc exposures can be aligned to an astrometric standard.
 
         Characeteristics of this test:
           * Input exposures include both ACS and WFC3 images of the same general field-of-view
             of 47Tuc suitable for creating a combined mosaic using both instruments.
         """
-        self.input_filenames = ['ib6v06c4q_flc.fits','ib6v06c7q_flc.fits',
+        self.input_loc = 'mosaic_47tuc'
+        input_filenames = ['ib6v06c4q_flc.fits','ib6v06c7q_flc.fits',
                                 'ib6v25aqq_flc.fits','ib6v25atq_flc.fits',
                                 'jddh02gjq_flc.fits','jddh02glq_flc.fits',
                                 'jddh02goq_flc.fits']
-        self.input_loc = 'mosaic_47tuc'
         self.curdir = os.getcwd()
 
-        for infile in self.input_filenames:
+        for infile in input_filenames:
             self.get_input_file(infile, docopy=True)
             updatewcs.updatewcs(infile)
 
         output_shift_file = 'test_mosaic_47tuc_shifts.txt'
-        align_to_gaia.align(self.input_filenames, shift_name=output_shift_file)
+        align_to_gaia.align(input_filenames, shift_name=output_shift_file)
 
         shift_file = Table.read(output_shift_file, format='ascii')
         rms_x = max(shift_file['col6'])
