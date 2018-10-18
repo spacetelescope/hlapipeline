@@ -48,16 +48,9 @@ class TestAlignMosaic(BaseHLATest):
                             'iaal01hyq_flc.fits', 'iaala3bsq_flc.fits',
                             'j8boa1m8q_flc.fits', 'j8boa1m4q_flc.fits',
                             'j8boa1maq_flc.fits', 'j8boa1m6q_flc.fits']
-        self.curdir = os.getcwd()
+        self.output_shift_file = 'test_mosaic_ngc188_shifts.txt'
+        shift_file = self.run_align(input_filenames)
 
-        for infile in input_filenames:
-            self.get_input_file(infile, docopy=True)
-            updatewcs.updatewcs(infile)
-
-        output_shift_file = 'test_mosaic_ngc188_shifts.txt'
-        align_to_gaia.align(input_filenames, shift_name=output_shift_file)
-
-        shift_file = Table.read(output_shift_file, format='ascii')
         rms_x = max(shift_file['col6'])
         rms_y = max(shift_file['col7'])
 
@@ -75,16 +68,9 @@ class TestAlignMosaic(BaseHLATest):
                                 'ib6v25aqq_flc.fits','ib6v25atq_flc.fits',
                                 'jddh02gjq_flc.fits','jddh02glq_flc.fits',
                                 'jddh02goq_flc.fits']
-        self.curdir = os.getcwd()
+        self.output_shift_file = 'test_mosaic_47tuc_shifts.txt'
+        shift_file = self.run_align(input_filenames)
 
-        for infile in input_filenames:
-            self.get_input_file(infile, docopy=True)
-            updatewcs.updatewcs(infile)
-
-        output_shift_file = 'test_mosaic_47tuc_shifts.txt'
-        align_to_gaia.align(input_filenames, shift_name=output_shift_file)
-
-        shift_file = Table.read(output_shift_file, format='ascii')
         rms_x = max(shift_file['col6'])
         rms_y = max(shift_file['col7'])
 
