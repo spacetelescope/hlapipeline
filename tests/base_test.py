@@ -3,10 +3,15 @@ import pytest
 import math
 
 from astropy.io import fits
+from astropy.table import Table
 
 import numpy as np
 import stwcs
+from stwcs import updatewcs
 from stsci.tools import fileutil
+
+from hlapipeline import align_to_gaia
+
 
 from ci_watson.artifactory_helpers import get_bigdata_root
 from ci_watson.hst_helpers import raw_from_asn, ref_from_image, download_crds
@@ -24,6 +29,7 @@ class BaseHLATest(BaseTest):
     ignore_hdus = []
     input_repo = 'hst-hla-pipeline'
     results_root = 'hst-hla-pipeline-results'
+    output_shift_file = None
 
     docopy = False  # Do not make additional copy by default
     rtol = 1e-6
@@ -89,6 +95,19 @@ class BaseHLATest(BaseTest):
                 if self.use_ftp_crds and refname not in os.listdir(self.curdir):
                     download_crds(ref_file, timeout=self.timeout)
         return filename
+
+    def run_align(self, input_filenames):
+        self.curdir = os.getcwd()
+
+        for infile in input_filenames:
+            self.get_input_file(infile, docopy=True)
+            updatewcs.updatewcs(infile)
+
+        align_to_gaia.align(input_filenames, shift_name=self.output_shift_file)
+
+        shift_file = Table.read(self.output_shift_file, format='ascii')
+        return shift_file
+
 
 """
 class BaseACSHRC(BaseACS):
