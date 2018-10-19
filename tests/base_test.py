@@ -75,26 +75,27 @@ class BaseHLATest(BaseTest):
 #        The associated CRDS reference files in ``refstr`` are also
 #        downloaded, if necessary.
 
-        filename = self.get_data(*args, docopy=docopy)
-        ref_files = ref_from_image(filename, reffile_lookup=self.reffile_lookup)
-        print("Looking for REF_FILES: {}".format(ref_files))
+        filenames = self.get_data(*args, docopy=docopy)
+        for filename in filenames:
+            ref_files = ref_from_image(filename, reffile_lookup=self.reffile_lookup)
+            print("Looking for REF_FILES: {}".format(ref_files))
 
-        for ref_file in ref_files:
-            if ref_file.strip() == '':
-                continue
-            if refsep not in ref_file:  # Local file
-                self.get_data('customRef', ref_file, docopy=docopy)
-            else:
-                # Start by checking to see whether IRAF variable *ref/*tab
-                # has been added to os.environ
-                refdir, refname = ref_file.split(refsep)
-                if refdir not in os.environ or os.environ[refdir] != self.curdir+os.sep:
-                    os.environ[refdir] = self.curdir + os.sep
+            for ref_file in ref_files:
+                if ref_file.strip() == '':
+                    continue
+                if refsep not in ref_file:  # Local file
+                    self.get_data('customRef', ref_file, docopy=docopy)
+                else:
+                    # Start by checking to see whether IRAF variable *ref/*tab
+                    # has been added to os.environ
+                    refdir, refname = ref_file.split(refsep)
+                    if refdir not in os.environ or os.environ[refdir] != self.curdir+os.sep:
+                        os.environ[refdir] = self.curdir + os.sep
 
-                # Download from FTP, if applicable
-                if self.use_ftp_crds and refname not in os.listdir(self.curdir):
-                    download_crds(ref_file, timeout=self.timeout)
-        return filename
+                    # Download from FTP, if applicable
+                    if self.use_ftp_crds and refname not in os.listdir(self.curdir):
+                        download_crds(ref_file, timeout=self.timeout)
+        return filenames
 
     def run_align(self, input_filenames):
         self.curdir = os.getcwd()

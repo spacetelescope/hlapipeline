@@ -75,3 +75,21 @@ class TestAlignMosaic(BaseHLATest):
         rms_y = max(shift_file['col7'])
 
         assert (rms_x <= 0.25 and rms_y <= 0.25)
+
+    def test_astroquery(self):
+        """Verify that new astroquery interface will work"""
+        self.curdir = os.getcwd()
+        self.input_loc = ''
+
+        filenames = self.get_input_file('ib6v06060')
+        for infile in filenames:
+            updatewcs.updatewcs(infile)
+
+        output_shift_file = 'test_astroquery_shifts.txt'
+        align_to_gaia.align(filenames, shift_name=output_shift_file)
+
+        shift_file = Table.read(output_shift_file, format='ascii')
+        rms_x = max(shift_file['col6'])
+        rms_y = max(shift_file['col7'])
+
+        assert (rms_x <= 0.25 and rms_y <= 0.25)

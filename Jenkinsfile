@@ -18,7 +18,7 @@ TEST_DEPS = "pytest pytest-remotedata stwcs git+https://github.com/spacetelescop
 
 // Conda needs explicit dependencies listed
 DEPS = "fitsblender graphviz nictools numpydoc matplotlib drizzlepac\
-        pytest pytest-remotedata photutils \
+        pytest pytest-remotedata photutils astroquery\
         scipy sphinx sphinx_rtd_theme \
         stsci_rtd_theme stsci.tools\
         stwcs setuptools python"
@@ -82,7 +82,7 @@ for (numpy_ver in matrix_numpy) {
                         'TEST_BIGDATA=https://bytesalad.stsci.edu/artifactory']
     install.build_cmds = [
         // Install python @ version
-        "${CONDA_CREATE} -n ${python_ver} ${DEPS_PYTHON} stsci-hst",
+        "${CONDA_CREATE} -n ${python_ver} ${DEPS_PYTHON} stsci",
 
         // Install custom required packages @ version
         "${WRAPPER} ${PIP_INST} ${DEPS_EX}",
