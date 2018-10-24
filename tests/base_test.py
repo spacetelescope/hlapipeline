@@ -98,15 +98,22 @@ class BaseHLATest(BaseTest):
         return filenames
 
     def run_align(self, input_filenames):
+
+        # protect against getting a single exposure filename or rootname as input
+        if not isinstance(input_filenames, list):
+            input_filenames = [input_filenames]
+
         self.curdir = os.getcwd()
 
+        all_files = []
         for infile in input_filenames:
-            self.get_input_file(infile, docopy=True)
-            updatewcs.updatewcs(infile)
+            downloaded_files = self.get_input_file(infile, docopy=True)
+            updatewcs.updatewcs(downloaded_files)
+            all_files.extend(downloaded_files)
 
-        align_to_gaia.align(input_filenames, shift_name=self.output_shift_file)
+        gaia_catalog, shift_file_name = align_to_gaia.align(all_files, shift_name=self.output_shift_file)
 
-        shift_file = Table.read(self.output_shift_file, format='ascii')
+        shift_file = Table.read(shift_file_name, format='ascii')
         return shift_file
 
 

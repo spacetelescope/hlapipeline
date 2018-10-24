@@ -10,8 +10,18 @@ def align(expnames, **kwargs):
     expnames : str or list of strings
         Filename of exposure or list of filenames to be aligned to GAIA catalog
 
+    Returns
+    =======
+    gaia_catalog : Table
+        Astropy Table object containing gaia catalog retrieved for exposures
+
+    shift_name : string
+        Filename of shift file written out by `tweakreg.Tweakreg`
+
     """
-    shift_name = kwargs.get('shift_name','shifts_gaia.txt')
+    shift_name = kwargs.get('shift_name',None)
+    if shift_name is None:
+        shift_name = 'shifts_gaia.txt'
     ref_cat_file = kwargs.get('output', None)
     # Set default values for specific Tweakreg parameters which are more
     # appropriate for most of our use cases
@@ -45,4 +55,4 @@ def align(expnames, **kwargs):
                       searchrad=searchrad,
                       searchunits=searchunits,
                       fitgeometry=fitgeometry)
-    return gaia_catalog
+    return gaia_catalog, shift_name

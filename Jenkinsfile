@@ -14,7 +14,7 @@ PYTEST = "pytest --basetemp=tests_output --junitxml results.xml --bigdata"
 
 // The minimum modules required to execute setup.py at all
 BASE_DEPS = "astropy numpy pyyaml"
-TEST_DEPS = "pytest pytest-remotedata stwcs git+https://github.com/spacetelescope/ci_watson.git@master"
+TEST_DEPS = "pytest==3.8.2 pytest-remotedata stwcs git+https://github.com/spacetelescope/ci_watson.git@master"
 
 // Conda needs explicit dependencies listed
 DEPS = "fitsblender graphviz nictools numpydoc matplotlib drizzlepac\

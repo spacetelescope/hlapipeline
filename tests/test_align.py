@@ -81,14 +81,7 @@ class TestAlignMosaic(BaseHLATest):
         self.curdir = os.getcwd()
         self.input_loc = ''
 
-        filenames = self.get_input_file('ib6v06060')
-        for infile in filenames:
-            updatewcs.updatewcs(infile)
-
-        output_shift_file = 'test_astroquery_shifts.txt'
-        align_to_gaia.align(filenames, shift_name=output_shift_file)
-
-        shift_file = Table.read(output_shift_file, format='ascii')
+        shift_file = self.run_align('ib6v06060')
         rms_x = max(shift_file['col6'])
         rms_y = max(shift_file['col7'])
 
