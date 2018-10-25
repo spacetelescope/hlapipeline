@@ -72,7 +72,7 @@ def create_astrometric_catalog(inputs, **pars):
     output : str, optional
         Filename to give to the astrometric catalog read in from the master
         catalog web service.  If 'None', no file will be written out.
-        Default: ref.cat
+        Default: ref_cat.ecsv
 
     gaia_only : bool, optional
         Specify whether or not to only use sources from GAIA in output catalog

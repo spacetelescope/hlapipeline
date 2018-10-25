@@ -1,3 +1,4 @@
+import os
 import hlapipeline.utils.astrometric_utils as hlautils
 
 from drizzlepac import tweakreg
@@ -19,10 +20,11 @@ def align(expnames, **kwargs):
         Filename of shift file written out by `tweakreg.Tweakreg`
 
     """
+    setname = os.path.basename(expnames[0]).split('_')[0]
     shift_name = kwargs.get('shift_name',None)
     if shift_name is None:
-        shift_name = 'shifts_gaia.txt'
-    ref_cat_file = kwargs.get('output', None)
+        shift_name = '{}_shifts_gaia.txt'.format(setname)
+    ref_cat_file = kwargs.get('ref_cat_file', '{}_gaia_ref.cat'.format(setname))
     # Set default values for specific Tweakreg parameters which are more
     # appropriate for most of our use cases
     updatehdr = kwargs.get('updatehdr', False)
@@ -33,7 +35,8 @@ def align(expnames, **kwargs):
     conv_width = kwargs.get('conv_width', 3.5)
 
     gaia_catalog = hlautils.create_astrometric_catalog(expnames, **kwargs)
-    gaia_catalog.write(ref_cat_file, format='ascii.no_header')
+    gaia_catalog.write(ref_cat_file, format='ascii.no_header', overwrite=True)
+    print("FINISHED writing out gaia_catalog: {}".format(os.path.abspath(ref_cat_file)))
 
     if len(gaia_catalog) > 6:
         fitgeometry = 'general'

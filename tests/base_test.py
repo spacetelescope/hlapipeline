@@ -74,11 +74,11 @@ class BaseHLATest(BaseTest):
 #        Download or copy input file (e.g., RAW) into the working directory.
 #        The associated CRDS reference files in ``refstr`` are also
 #        downloaded, if necessary.
-
+        curdir = os.getcwd()
         filenames = self.get_data(*args, docopy=docopy)
         for filename in filenames:
             ref_files = ref_from_image(filename, reffile_lookup=self.reffile_lookup)
-            print("Looking for REF_FILES: {}".format(ref_files))
+            print("Looking for {} REF_FILES: {}".format(filename, ref_files))
 
             for ref_file in ref_files:
                 if ref_file.strip() == '':
@@ -89,11 +89,17 @@ class BaseHLATest(BaseTest):
                     # Start by checking to see whether IRAF variable *ref/*tab
                     # has been added to os.environ
                     refdir, refname = ref_file.split(refsep)
-                    if refdir not in os.environ or os.environ[refdir] != self.curdir+os.sep:
-                        os.environ[refdir] = self.curdir + os.sep
+                    refdir_parent = os.path.split(refdir)[0]
+                    # Define refdir to point to current directory if:
+                    #   i. refdir is not defined in environment already
+                    #  ii. refdir in os.environ points to another test directory
+                    # This logic should leave refdir unchanged if it already
+                    # points to a globally defined directory.
+                    if refdir not in os.environ or refdir_parent in curdir:
+                        os.environ[refdir] = curdir + os.sep
 
                     # Download from FTP, if applicable
-                    if self.use_ftp_crds and refname not in os.listdir(self.curdir):
+                    if self.use_ftp_crds:
                         download_crds(ref_file, timeout=self.timeout)
         return filenames
 
