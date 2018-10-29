@@ -1,3 +1,5 @@
+import sys
+import traceback
 import os
 import pytest
 import numpy
@@ -116,7 +118,6 @@ class TestAlignMosaic(BaseHLATest):
         # the master CSV file and return as an Astropy table
         randomCandidateTable = catutils.randomSelectFromCSV(input_file_path[0], 
             inputNumEntries, inputSeedValue)
-        print('table:', randomCandidateTable)
 
         # Invoke the methods which will handle acquiring/downloading the data from 
         # MAST and perform the alignment
@@ -136,6 +137,9 @@ class TestAlignMosaic(BaseHLATest):
             The wrapper provides the parameter settings for the underlying test, 
             as well as implements the criterion for the overall success or failure
             of the test.
+  
+            This routine is strictly for realistic testing on a small number of
+            datasets. 
         """
         inputListFile = 'ACSList5.csv'
         
@@ -154,7 +158,6 @@ class TestAlignMosaic(BaseHLATest):
         # the master CSV file and return as an Astropy table
         randomCandidateTable = catutils.randomSelectFromCSV(input_file_path[0], 
             inputNumEntries, inputSeedValue)
-        print('table:', randomCandidateTable)
 
         # Invoke the methods which will handle acquiring/downloading the data from 
         # MAST and perform the alignment
@@ -194,7 +197,6 @@ class TestAlignMosaic(BaseHLATest):
         # the exception and keep going.
         for dataset in dataset_list:
 
-           print(dataset)
            try:
                shift_file = self.run_align([dataset])
                x_shift = numpy.alltrue(numpy.isnan(shift_file['col2']))
@@ -205,9 +207,12 @@ class TestAlignMosaic(BaseHLATest):
                    numSuccess += 1
 
            # Catch anything that happens as this dataset will be considered a failure, but
-           # the processing of datasets should continue
+           # the processing of datasets should continue.  Generate sufficient output exception
+           # information so problems can be addressed.
            except Exception:
-               pass
+               exc_type, exc_value, exc_tb = sys.exc_info()
+               traceback.print_exception(exc_type, exc_value, exc_tb, file=sys.stdout)
+               continue
 
         # Determine the percent success over all datasets processed
         percentSuccess = numSuccess/numAllDatasets
