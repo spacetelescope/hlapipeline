@@ -80,6 +80,7 @@ class TestAlignMosaic(BaseHLATest):
 
         assert (rms_x <= 0.25 and rms_y <= 0.25)
 
+    @pytest.mark.xfail
     @pytest.mark.parametrize("input_filenames", [['j8ura1j1q_flt.fits','j8ura1j2q_flt.fits',
                                                   'j8ura1j4q_flt.fits','j8ura1j6q_flt.fits',
                                                   'j8ura1j7q_flt.fits','j8ura1j8q_flt.fits',
