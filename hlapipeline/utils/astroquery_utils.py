@@ -26,7 +26,7 @@ def retrieve_observation(obsid, suffix=['FLC']):
 
     """
     local_files = []
-    obsTable = Observations.query_criteria(obs_id=obsid)
+    obsTable = Observations.query_criteria(obs_id=obsid, obstype='all')
     # Catch the case where no files are found for download
     if len(obsTable) == 0:
         print("WARNING: Query for {} returned NO RESULTS!".format(obsid))
