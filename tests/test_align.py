@@ -1,6 +1,7 @@
 import sys
 import traceback
 import os
+import datetime
 import pytest
 import numpy
 from astropy.table import Table
@@ -197,6 +198,9 @@ class TestAlignMosaic(BaseHLATest):
         # the exception and keep going.
         for dataset in dataset_list:
 
+           print("TEST_ALIGN. Dataset: ", dataset)
+           currentDT = datetime.datetime.now()
+           print(str(currentDT))
            try:
                shift_file = self.run_align([dataset])
                x_shift = numpy.alltrue(numpy.isnan(shift_file['col2']))
@@ -205,6 +209,9 @@ class TestAlignMosaic(BaseHLATest):
 
                if not x_shift and ((rms_x <= 0.25) and (rms_y <= 0.25)):
                    numSuccess += 1
+                   print("TEST_ALIGN. Successful Dataset: ", dataset, "\n")
+               else:
+                   print("TEST_ALIGN. Unsuccessful Dataset: ", dataset, "\n")
 
            # Catch anything that happens as this dataset will be considered a failure, but
            # the processing of datasets should continue.  Generate sufficient output exception
@@ -212,11 +219,12 @@ class TestAlignMosaic(BaseHLATest):
            except Exception:
                exc_type, exc_value, exc_tb = sys.exc_info()
                traceback.print_exception(exc_type, exc_value, exc_tb, file=sys.stdout)
+               print("TEST_ALIGN. Exception Dataset: ", dataset, "\n")
                continue
 
         # Determine the percent success over all datasets processed
         percentSuccess = numSuccess/numAllDatasets
-        print('Number of successful tests: ', numSuccess, ' Total number of tests: ', numAllDatasets, ' Percent success: ', percentSuccess*100.0)
+        print('TEST_ALIGN. Number of successful tests: ', numSuccess, ' Total number of tests: ', numAllDatasets, ' Percent success: ', percentSuccess*100.0)
  
         return percentSuccess
 
