@@ -80,7 +80,16 @@ class TestAlignMosaic(BaseHLATest):
 
         assert (rms_x <= 0.25 and rms_y <= 0.25)
 
-    @pytest.mark.parametrize("input_filenames", [['j92c01b4q_flc.fits','j92c01b5q_flc.fits',
+    @pytest.mark.parametrize("input_filenames", [['j8ura1j1q_flt.fits','j8ura1j2q_flt.fits',
+                                                  'j8ura1j4q_flt.fits','j8ura1j6q_flt.fits',
+                                                  'j8ura1j7q_flt.fits','j8ura1j8q_flt.fits',
+                                                  'j8ura1j9q_flt.fits','j8ura1jaq_flt.fits',
+                                                  'j8ura1jbq_flt.fits','j8ura1jcq_flt.fits',
+                                                  'j8ura1jdq_flt.fits','j8ura1jeq_flt.fits',
+                                                  'j8ura1jfq_flt.fits','j8ura1jgq_flt.fits',
+                                                  'j8ura1jhq_flt.fits','j8ura1jiq_flt.fits',
+                                                  'j8ura1jjq_flt.fits','j8ura1jkq_flt.fits'],
+                                                 ['j92c01b4q_flc.fits','j92c01b5q_flc.fits',
                                                   'j92c01b7q_flc.fits','j92c01b9q_flc.fits'],
                                                  ['jbqf02gzq_flc.fits', 'jbqf02h5q_flc.fits',
                                                   'jbqf02h7q_flc.fits', 'jbqf02hdq_flc.fits',
@@ -102,8 +111,7 @@ class TestAlignMosaic(BaseHLATest):
                                                  ['ibnh02coq_flc.fits','ibnh02cmq_flc.fits',
                                                   'ibnh02c7q_flc.fits','ibnh02c5q_flc.fits',
                                                   'ibnh02cpq_flc.fits','ibnh02c9q_flc.fits',
-                                                  'ibnh02bfq_flc.fits','ibnh02beq_flc.fits'],
-                                                 ])
+                                                  'ibnh02bfq_flc.fits','ibnh02beq_flc.fits']])
     def test_align_single_visits(self,input_filenames):
         """ Verify whether single-visit exposures can be aligned to an astrometric standard.
 
@@ -113,11 +121,13 @@ class TestAlignMosaic(BaseHLATest):
 
         The following datasets are used in these tests:
 
-            * ACS dataset 10265_01: 4x F606W full-frame ACS/WFC images (assert err)
-            * ACS dataset 12580_02: 5x F475W & 6x F814W ACS/WFC images (OK!)
-            * WFC3 dataset 11663_12: 4x F160W full-frame WFC3/IR images (other err)
-            * WFC3 dataset 12219_01: 8x F160W full-frame WFC3/IR images, 9x F336W full-frame WFC3/UVIS images (OK!)
-            * WFC3 dataset 12379_02: 4X F606W, 4x F502N full-frame WFC3/UVIS images (assert err)
+            * ACS dataset 10048_a1: 2x F344N, 1x F435W, 1x F475W, 2x F502N, 2x F550M, 1x F555W, 1x F606W, 1x F625W,
+              2x F658N, 1x F775W, 1x F814W, 1x F850LP, and 2x F892N ACS/HRC images
+            * ACS dataset 10265_01: 4x F606W full-frame ACS/WFC images
+            * ACS dataset 12580_02: 5x F475W & 6x F814W ACS/WFC images
+            * WFC3 dataset 11663_12: 4x F160W full-frame WFC3/IR images
+            * WFC3 dataset 12219_01: 8x F160W full-frame WFC3/IR images, 9x F336W full-frame WFC3/UVIS images
+            * WFC3 dataset 12379_02: 4X F606W, 4x F502N full-frame WFC3/UVIS images
 
         """
         self.input_loc = 'base_tests'
