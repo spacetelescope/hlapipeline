@@ -80,6 +80,62 @@ class TestAlignMosaic(BaseHLATest):
 
         assert (rms_x <= 0.25 and rms_y <= 0.25)
 
+    @pytest.mark.parametrize("input_filenames", [['j92c01b4q_flc.fits','j92c01b5q_flc.fits',
+                                                  'j92c01b7q_flc.fits','j92c01b9q_flc.fits'],
+                                                 ['jbqf02gzq_flc.fits', 'jbqf02h5q_flc.fits',
+                                                  'jbqf02h7q_flc.fits', 'jbqf02hdq_flc.fits',
+                                                  'jbqf02hjq_flc.fits', 'jbqf02hoq_flc.fits',
+                                                  'jbqf02hqq_flc.fits', 'jbqf02hxq_flc.fits',
+                                                  'jbqf02i3q_flc.fits', 'jbqf02i8q_flc.fits',
+                                                  'jbqf02iaq_flc.fits'],
+                                                 ['ib2u12kaq_flt.fits', 'ib2u12keq_flt.fits',
+                                                  'ib2u12kiq_flt.fits', 'ib2u12klq_flt.fits'],
+                                                 ['ibjt01a1q_flc.fits', 'ibjt01a8q_flc.fits',
+                                                  'ibjt01aiq_flt.fits', 'ibjt01amq_flt.fits',
+                                                  'ibjt01aqq_flt.fits', 'ibjt01auq_flt.fits',
+                                                  'ibjt01yqq_flc.fits', 'ibjt01z0q_flc.fits',
+                                                  'ibjt01zwq_flc.fits', 'ibjt01a4q_flc.fits',
+                                                  'ibjt01acq_flc.fits', 'ibjt01akq_flt.fits',
+                                                  'ibjt01aoq_flt.fits', 'ibjt01asq_flt.fits',
+                                                  'ibjt01avq_flt.fits', 'ibjt01yuq_flc.fits',
+                                                  'ibjt01ztq_flc.fits'],
+                                                 ['ibnh02coq_flc.fits','ibnh02cmq_flc.fits',
+                                                  'ibnh02c7q_flc.fits','ibnh02c5q_flc.fits',
+                                                  'ibnh02cpq_flc.fits','ibnh02c9q_flc.fits',
+                                                  'ibnh02bfq_flc.fits','ibnh02beq_flc.fits'],
+                                                 ])
+    def test_align_single_visits(self,input_filenames):
+        """ Verify whether single-visit exposures can be aligned to an astrometric standard.
+
+        Characteristics of these tests:
+          * Input exposures include exposures from a number of single visit datasets to explore what impact differing
+            observing modes (differing instruments, detectors, filters, subarray size, etc.) have on astrometry.
+
+        The following datasets are used in these tests:
+
+            * ACS dataset 10265_01: 4x F606W full-frame ACS/WFC images (assert err)
+            * ACS dataset 12580_02: 5x F475W & 6x F814W ACS/WFC images (OK!)
+            * WFC3 dataset 11663_12: 4x F160W full-frame WFC3/IR images (other err)
+            * WFC3 dataset 12219_01: 8x F160W full-frame WFC3/IR images, 9x F336W full-frame WFC3/UVIS images (OK!)
+            * WFC3 dataset 12379_02: 4X F606W, 4x F502N full-frame WFC3/UVIS images (assert err)
+
+        """
+        self.input_loc = 'base_tests'
+
+        self.curdir = os.getcwd()
+        for infile in input_filenames:
+            self.get_input_file(infile, docopy=True)
+            updatewcs.updatewcs(infile)
+
+        output_shift_file = 'test_single_visits_shifts.txt'
+        align_to_gaia.align(input_filenames, shift_name=output_shift_file)
+
+        shift_file = Table.read(output_shift_file, format='ascii')
+        rms_x = max(shift_file['col6'])
+        rms_y = max(shift_file['col7'])
+
+        assert (rms_x <= 0.25 and rms_y <= 0.25)
+
     def test_astroquery(self):
         """Verify that new astroquery interface will work"""
         self.curdir = os.getcwd()
@@ -96,13 +152,13 @@ class TestAlignMosaic(BaseHLATest):
     def test_align_randomFields(self):
         """ Wrapper to set up the test for aligning a large number of randomly
             selected fields (aka datasets) from a input ascii file (CSV).
-    
-            The wrapper provides the parameter settings for the underlying test, 
+
+            The wrapper provides the parameter settings for the underlying test,
             as well as implements the criterion for the overall success or failure
             of the test.
         """
         inputListFile = 'ACSList50.csv'
-        
+
         # Desired number of random entries for testing
         inputNumEntries = 50
 
@@ -114,12 +170,12 @@ class TestAlignMosaic(BaseHLATest):
         self.curdir     = os.getcwd()
         input_file_path = self.get_data(inputListFile)
 
-        # Randomly select a subset of field names (each field represented by a row) from 
+        # Randomly select a subset of field names (each field represented by a row) from
         # the master CSV file and return as an Astropy table
-        randomCandidateTable = catutils.randomSelectFromCSV(input_file_path[0], 
+        randomCandidateTable = catutils.randomSelectFromCSV(input_file_path[0],
             inputNumEntries, inputSeedValue)
 
-        # Invoke the methods which will handle acquiring/downloading the data from 
+        # Invoke the methods which will handle acquiring/downloading the data from
         # MAST and perform the alignment
         percentSuccess = 0.0
         try:
@@ -133,16 +189,16 @@ class TestAlignMosaic(BaseHLATest):
     def test_align_fewRandomFields(self):
         """ Wrapper to set up the test for aligning a *FEW* randomly
             selected fields (aka datasets) from a input ascii file (CSV).
-    
-            The wrapper provides the parameter settings for the underlying test, 
+
+            The wrapper provides the parameter settings for the underlying test,
             as well as implements the criterion for the overall success or failure
             of the test.
-  
+
             This routine is strictly for realistic testing on a small number of
-            datasets. 
+            datasets.
         """
         inputListFile = 'ACSList5.csv'
-        
+
         # Desired number of random entries for testing
         inputNumEntries = 5
 
@@ -154,12 +210,12 @@ class TestAlignMosaic(BaseHLATest):
         self.curdir     = os.getcwd()
         input_file_path = self.get_data(inputListFile)
 
-        # Randomly select a subset of field names (each field represented by a row) from 
+        # Randomly select a subset of field names (each field represented by a row) from
         # the master CSV file and return as an Astropy table
-        randomCandidateTable = catutils.randomSelectFromCSV(input_file_path[0], 
+        randomCandidateTable = catutils.randomSelectFromCSV(input_file_path[0],
             inputNumEntries, inputSeedValue)
 
-        # Invoke the methods which will handle acquiring/downloading the data from 
+        # Invoke the methods which will handle acquiring/downloading the data from
         # MAST and perform the alignment
         percentSuccess = 0.0
         try:
@@ -172,7 +228,7 @@ class TestAlignMosaic(BaseHLATest):
     def align_randomFields(self, randomTable):
         """ Process randomly selected fields (aka datasets) stored in an Astropy table.
 
-            Each field is used as input to determine if it can be aligned to an 
+            Each field is used as input to determine if it can be aligned to an
             astrometric standard.  The success or fail status for each test is retained
             as the overall success or fail statistic is the necessary output from
             this test.
@@ -189,7 +245,7 @@ class TestAlignMosaic(BaseHLATest):
 
         # Process the dataset names in the list
         #
-        # If the dataset name represents an association ID, the multiplicity 
+        # If the dataset name represents an association ID, the multiplicity
         # of images within the association need to be processed.  Otherwise,
         # the dataset is a single image.
         #
@@ -217,17 +273,17 @@ class TestAlignMosaic(BaseHLATest):
         # Determine the percent success over all datasets processed
         percentSuccess = numSuccess/numAllDatasets
         print('Number of successful tests: ', numSuccess, ' Total number of tests: ', numAllDatasets, ' Percent success: ', percentSuccess*100.0)
- 
-        return percentSuccess
 
+        return percentSuccess
+#
 def get_dataset_list(tableName):
     """ Standalone function to read the Astropy table and get the dataset names
 
     Parameters
     ==========
     tableName : str
-        Filename of the input master CSV file containing individual 
-        images or association names, as well as observational 
+        Filename of the input master CSV file containing individual
+        images or association names, as well as observational
         information regarding the images
 
     Returns
@@ -246,7 +302,7 @@ def get_dataset_list(tableName):
     for imgid,asnid in zip(datasetIDs,asnIDs):
 
         # If the asnID is the string NONE, this is an individual image,
-        # and it is necessary to get the individual image dataset name.  
+        # and it is necessary to get the individual image dataset name.
         # Otherwise, this is an association dataset, so just add the asnID.
         if (asnid.upper() == "NONE"):
             datasetNames.append(imgid)
