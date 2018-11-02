@@ -26,7 +26,10 @@ def retrieve_observation(obsid, suffix=['FLC']):
 
     """
     local_files = []
+
+    # Query MAST for the data with an observation type of either "science" or "calibration"
     obsTable = Observations.query_criteria(obs_id=obsid, obstype='all')
+
     # Catch the case where no files are found for download
     if len(obsTable) == 0:
         print("WARNING: Query for {} returned NO RESULTS!".format(obsid))
@@ -37,6 +40,24 @@ def retrieve_observation(obsid, suffix=['FLC']):
                                               productSubGroupDescription=suffix,
                                               extension='fits',
                                               mrp_only=False)
+
+    # After the filtering has been done, ensure there is still data in the table for download.
+    # If the table is empty, look for FLT images in lieu of FLC images. Only want one
+    # or the other (not both!), so just do the filtering again.
+    if len(dataProductsByID) == 0:
+        print("WARNING: No FLC files found for {} - will look for FLT files instead.".format(obsid))
+        suffix = ['FLT']
+        dataProductsByID = Observations.filter_products(dpobs,
+                                              productSubGroupDescription=suffix,
+                                              extension='fits',
+                                              mrp_only=False)
+
+        # If still no data, then return.  An exception will eventually be thrown in
+        # the higher level code.
+        if len(dataProductsByID) == 0:
+            print("WARNING: No FLC or FLT files found for {}.".format(obsid))
+            return local_files
+
     manifest = Observations.download_products(dataProductsByID, mrp_only=False)
 
     download_dir = None
