@@ -132,20 +132,18 @@ class TestAlignMosaic(BaseHLATest):
 
         """
         self.input_loc = 'base_tests'
-
         self.curdir = os.getcwd()
-        for infile in input_filenames:
-            self.get_input_file(infile, docopy=True)
-            updatewcs.updatewcs(infile)
-
-        output_shift_file = 'test_single_visits_shifts.txt'
-        align_to_gaia.align(input_filenames, shift_name=output_shift_file)
-
-        shift_file = Table.read(output_shift_file, format='ascii')
-        rms_x = max(shift_file['col6'])
-        rms_y = max(shift_file['col7'])
-
-        assert (rms_x <= 0.25 and rms_y <= 0.25)
+        try:
+            shift_file = self.run_align(input_filenames)
+            x_shift = numpy.alltrue(numpy.isnan(shift_file['col2']))
+            y_shift = numpy.alltrue(numpy.isnan(shift_file['col3']))
+            rms_x = max(shift_file['col6'])
+            rms_y = max(shift_file['col7'])
+        except Exception:
+            exc_type, exc_value, exc_tb = sys.exc_info()
+            traceback.print_exception(exc_type, exc_value, exc_tb, file=sys.stdout)
+            sys.exit()
+        assert (x_shift == False and y_shift == False and rms_x <= 0.25 and rms_y <= 0.25)
 
     def test_astroquery(self):
         """Verify that new astroquery interface will work"""
