@@ -30,7 +30,8 @@ class BaseHLATest(BaseTest):
     input_repo = 'hst-hla-pipeline'
     results_root = 'hst-hla-pipeline-results'
     output_shift_file = None
-
+    fit_limit = 0.010 # 10 milli-arcseconds
+    
     docopy = False  # Do not make additional copy by default
     rtol = 1e-6
 
@@ -120,7 +121,7 @@ class BaseHLATest(BaseTest):
         gaia_catalog, shift_file_name = align_to_gaia.align(all_files, shift_name=self.output_shift_file)
 
         shift_file = Table.read(shift_file_name, format='ascii')
-        return shift_file
+        return shift_file, all_files
 
 
 """

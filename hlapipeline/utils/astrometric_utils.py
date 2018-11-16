@@ -66,7 +66,7 @@ def create_astrometric_catalog(inputs, **pars):
 
     catalog : str, optional
         Name of catalog to extract astrometric positions for sources in the
-        input images' field-of-view. Default: GSC241. Options available are
+        input images' field-of-view. Default: GAIADR2. Options available are
         documented on the catalog web page.
 
     output : str, optional
@@ -89,25 +89,18 @@ def create_astrometric_catalog(inputs, **pars):
 
     """
     # interpret input parameters
-    catalog = pars.get("catalog", 'GSC241')
+    catalog = pars.get("catalog", 'GAIADR2')
     output = pars.get("output", 'ref_cat.ecsv')
     gaia_only = pars.get("gaia_only", False)
     table_format = pars.get("table_format", 'ascii.ecsv')
 
     inputs, _ = parseinput.parseinput(inputs)
-    # start by creating a composite field-of-view for all inputs
-    wcslist = []
-    for img in inputs:
-        nsci = fu.countExtn(img)
-        for num in range(nsci):
-            extname = '{}[sci,{}]'.format(img, num+1)
-            wcslist.append(stwcs.wcsutil.HSTWCS(extname))
-
+    
     # This default output WCS will have the same plate-scale and orientation
     # as the first chip in the list, which for WFPC2 data means the PC.
     # Fortunately, for alignment, this doesn't matter since no resampling of
     # data will be performed
-    outwcs = utils.output_wcs(wcslist)
+    outwcs = build_reference_wcs(inputs)
     radius = compute_radius(outwcs)
     ra, dec = outwcs.wcs.crval
 
@@ -140,6 +133,45 @@ def create_astrometric_catalog(inputs, **pars):
 
     return ref_table
 
+def build_reference_wcs(inputs):
+    """Create the reference WCS based on all the inputs for a field"""
+    # start by creating a composite field-of-view for all inputs
+    wcslist = []
+    for img in inputs:
+        nsci = countExtn(img)
+        for num in range(nsci):
+            extname = '{}[sci,{}]'.format(img, num+1)
+            wcslist.append(stwcs.wcsutil.HSTWCS(extname))
+
+    # This default output WCS will have the same plate-scale and orientation
+    # as the first chip in the list, which for WFPC2 data means the PC.
+    # Fortunately, for alignment, this doesn't matter since no resampling of
+    # data will be performed
+    outwcs = utils.output_wcs(wcslist)
+    
+    return outwcs
+
+def countExtn(fimg, extname='SCI'):
+    """
+    Return the number of 'extname' extensions, defaulting to counting the
+    number of SCI extensions.
+    """
+
+    closefits = False
+    if isinstance(fimg, str):
+        fimg = pf.open(fimg)
+        closefits = True
+
+    n = 0
+    for e in fimg:
+        if 'extname' in e.header and e.header['extname'] == extname:
+            n += 1
+
+    if closefits:
+        fimg.close()
+
+    return n
+    
 
 def get_catalog(ra, dec, sr=0.1, fmt='CSV', catalog='GSC241'):
     """ Extract catalog from VO web service.
