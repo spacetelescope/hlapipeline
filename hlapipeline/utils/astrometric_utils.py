@@ -121,7 +121,7 @@ def create_astrometric_catalog(inputs, **pars):
 
     catalog : str, optional
         Name of catalog to extract astrometric positions for sources in the
-        input images' field-of-view. Default: GSC241. Options available are
+        input images' field-of-view. Default: GAIADR2. Options available are
         documented on the catalog web page.
 
     output : str, optional
@@ -144,7 +144,7 @@ def create_astrometric_catalog(inputs, **pars):
 
     """
     # interpret input parameters
-    catalog = pars.get("catalog", 'GSC241')
+    catalog = pars.get("catalog", 'GAIADR2')
     output = pars.get("output", 'ref_cat.ecsv')
     gaia_only = pars.get("gaia_only", False)
     table_format = pars.get("table_format", 'ascii.ecsv')
@@ -445,6 +445,10 @@ def build_source_catalog(image, refwcs, **kwargs):
     # Build source catalog for entire image
     master_cat = None
     numSci = countExtn(image, extname='SCI')
+    # if no refwcs specified, build one now...
+    if refwcs is None:
+        refwcs = build_reference_wcs([image])
+
     for chip in range(numSci):
         chip += 1
         # find sources in image
