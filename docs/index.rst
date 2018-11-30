@@ -1,5 +1,5 @@
 Welcome to HLA in the Pipeline's documentation!
-======================================
+================================================
 
 .. toctree::
    :maxdepth: 2
@@ -7,6 +7,7 @@ Welcome to HLA in the Pipeline's documentation!
 
    readme
    installation
+   design
    usage
    modules
    contributing
