@@ -3,14 +3,13 @@
 """This script is a modernized replacement of tweakreg.
 
 """
+import os
 
 from astropy.io import fits
 from astropy.table import Table
-import pdb
 from stwcs.wcsutil import HSTWCS
 import sys
-from utils import astrometric_utils as amutils
-from utils import astroquery_utils as aqutils
+from hlapipeline.utils import astrometric_utils as amutils
 
 
 # Module-level dictionary contains instrument/detector-specific parameters used later on in the script.
@@ -18,7 +17,10 @@ detector_specific_params = {"acs":
                                 {"hrc":
                                      {"fwhmpsf": 0.073},  # TODO: Verify value
                                  "sbc":
-                                     {"fwhmpsf": 0.065},  # TODO: Verify value
+                                     {"fwhmpsf": 0.065,
+                                     "threshold":10,
+                                     "classify":False
+                                      },  # TODO: Verify value
                                  "wfc":
                                      {"fwhmpsf": 0.076}},  # TODO: Verify value
                             "wfc3":
@@ -109,6 +111,7 @@ def generate_source_catalogs(imglist, refwcs, **pars):
     """
     sourcecatalogdict = {}
     for imgname in imglist:
+
         print("Image name: ", imgname)
 
         sourcecatalogdict[imgname] = {}
@@ -122,7 +125,10 @@ def generate_source_catalogs(imglist, refwcs, **pars):
         # get instrument/detector-specific image alignment parameters
         if instrument in detector_specific_params.keys():
             if detector in detector_specific_params[instrument].keys():
-                sourcecatalogdict[imgname]["params"] = detector_specific_params[instrument][detector]
+                detector_pars = detector_specific_params[instrument][detector]
+                sourcecatalogdict[imgname]["params"] = detector_pars
+                # to allow generate_source_catalog to get detector specific parameters
+                pars.update(detector_pars)
             else:
                 sys.exit("ERROR! Unrecognized detector '{}'. Exiting...".format(detector))
         else:
@@ -135,9 +141,10 @@ def generate_source_catalogs(imglist, refwcs, **pars):
 
         # write out coord lists to files for diagnostic purposes. Protip: To display the sources in these files in DS9,
         # set the "Coordinate System" option to "Physical" when loading the region file.
-        regfilename = imgname[0:9]+".reg"
+        imgroot = os.path.basename(imgname).split('_')[0]
+        regfilename = imgroot+".reg"
         out_table = Table(sourcecatalogdict[imgname]["catalog_table"])
-        out_table.write(regfilename, include_names=["xcentroid", "ycentroid"], format="ascii.basic")
+        out_table.write(regfilename, include_names=["xcentroid", "ycentroid"], format="ascii.fast_commented_header")
         print("Wrote region file {}\n".format(regfilename))
         imghdu.close()
     return(sourcecatalogdict)
