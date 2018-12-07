@@ -117,6 +117,9 @@ class TestPipeline(BaseHLATest):
 
         if not isinstance(input_filenames, list):
             input_filenames = [input_filenames]
+
+        # Use this to collect all failures BEFORE throwing AssertionError
+        failures=False  
         try:
             # Make local copies of input files
             local_files = []
@@ -127,7 +130,7 @@ class TestPipeline(BaseHLATest):
             refcat = amutils.create_astrometric_catalog(local_files, catalog='GAIADR2')
 
             # Generate source catalogs for each input image
-            source_catalogs = alignimages.generate_source_catalogs(local_files)
+            source_catalogs = generate_source_catalogs(local_files, None)
 
             # Convert input images to tweakwcs-compatible NDData objects and
             # attach source catalogs to them.
@@ -137,18 +140,32 @@ class TestPipeline(BaseHLATest):
                                                     source_catalogs[image]['catalog_table']))
 
             # Specify matching algorithm to use
-            match = TPMatch(searchrad=250, separation=0.1, tolerance=5, use2dhist=True)
+            match = tweakwcs.TPMatch(searchrad=250, separation=0.1, 
+                                     tolerance=5, use2dhist=True)
 
             # Align images and correct WCS
             tweakwcs.tweak_image_wcs(imglist, refcat, match=match)
+        except Exception:
+            failures = True
+            print("ALIGNMENT EXCEPTION:  Failed to align {}".format(infile))
 
-            # Review quality of alignment
+        if not failures:
             for chip in imglist:
                 tweak_info = chip.meta.get('tweakwcs_info', None)
+                chip_id = chip.meta.get('chip_id',1)
                 # determine 30mas limit in pixels
-                xylimit = 0.030 / chip.wcs.pscale
+                xylimit = 30
                 # Perform comparisons
                 nmatches = tweak_info['nmatches']
-                xrms = tweak_info['xrms']
-                yrms = tweak_info['yrms']
-                assert(nmatches > 0 and xrms < xylimit and yrms < xylimit)
+                xrms,yrms = tweak_info['rms']
+                xrms *= chip.wcs.pscale*1000
+                yrms *= chip.wcs.pscale*1000
+                if any([nmatches==0, xrms>xylimit, yrms>xylimit]):
+                    failures = True
+                    msg1 = "Observation {}[{}] failed alignment with "
+                    msg2 = "    RMS=({:.4f},{:.4f})mas [limit:{:.4f}mas] and NMATCHES={}"
+                    print(msg1.format(infile, chip_id))
+                    print(msg2.format(xrms, yrms, xylimit, nmatches))
+            
+        assert(not failures)
+    
