@@ -45,7 +45,7 @@ class TestPipeline(BaseHLATest):
                                  ('J8D806010','j8d806bgq_sky_cat.ecsv'),
                                  ('IB2V09010', 'ib2v09kzq_sky_cat.ecsv')]
                             )
-    def XXtest_generate_catalog(self,input_filenames, truth_file):
+    def test_generate_catalog(self,input_filenames, truth_file):
         """ Verify whether sources from astrometric catalogs can be extracted from images.
 
         Success Criteria
