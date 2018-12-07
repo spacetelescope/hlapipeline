@@ -8,7 +8,7 @@ from astropy.io import fits
 import tweakwcs
 from base_test import BaseHLATest
 import hlapipeline.utils.astrometric_utils as amutils
-from hlapipeline.alignimages import generate_source_catalogs
+from hlapipeline.alignimages import generate_source_catalogs, detector_specific_params
 from ci_watson.artifactory_helpers import get_bigdata
 
 
@@ -66,10 +66,15 @@ class TestPipeline(BaseHLATest):
             for infile in input_filenames:
                 downloaded_files = self.get_input_file(infile, docopy=True)
                 local_files.extend(downloaded_files)
-
+            
+            test_image = local_files[0]
+            print("Testing with {}".format(test_image))
+            imghdu = fits.open(test_image)
+            instrume = imghdu[0].header['instrume'].lower()
+            detector = imghdu[0].header['detector'].lower()
+            instr_pars = detector_specific_params[instrume][detector]
             reference_wcs = amutils.build_reference_wcs(local_files)
-            input_catalog_dict = generate_source_catalogs([local_files[0]], reference_wcs)
-            imcat = input_catalog_dict[local_files[0]]['catalog_table']
+            imcat = amutils.generate_sky_catalog(imghdu, reference_wcs, **instr_pars)
             imcat.rename_column('xcentroid', 'x')
             imcat.rename_column('ycentroid', 'y')
 
@@ -86,7 +91,7 @@ class TestPipeline(BaseHLATest):
             num_expected = len(reference_table)
 
             # Perform matching
-            match = tweakwcs.TPMatch(searchrad=5, separation=0.1, tolerance=5, use2dhist=True)
+            match = tweakwcs.TPMatch(searchrad=200, separation=0.1, tolerance=5, use2dhist=True)
             ridx, iidx = match(reference_table, imcat, wcs_corrector)
             nmatches = len(ridx)
 
