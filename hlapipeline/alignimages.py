@@ -109,9 +109,9 @@ def generate_source_catalogs(imglist, refwcs, **pars):
         detector-specific processing parameters and 2) an astropy table of position and photometry information of all
         detected sources
     """
+    output = pars.get('output', False)
     sourcecatalogdict = {}
     for imgname in imglist:
-
         print("Image name: ", imgname)
 
         sourcecatalogdict[imgname] = {}
@@ -137,15 +137,19 @@ def generate_source_catalogs(imglist, refwcs, **pars):
         # Identify sources in image, convert coords from chip x, y form to reference WCS sky RA, Dec form.
         imgwcs = HSTWCS(imghdu, 1)
         fwhmpsf_pix = sourcecatalogdict[imgname]["params"]['fwhmpsf']/imgwcs.pscale
-        sourcecatalogdict[imgname]["catalog_table"] = amutils.generate_source_catalog(imghdu, refwcs, fwhm=fwhmpsf_pix, **pars)
+        sourcecatalogdict[imgname]["catalog_table"] = amutils.generate_source_catalog(imghdu, fwhm=fwhmpsf_pix, **pars)
 
         # write out coord lists to files for diagnostic purposes. Protip: To display the sources in these files in DS9,
         # set the "Coordinate System" option to "Physical" when loading the region file.
         imgroot = os.path.basename(imgname).split('_')[0]
-        regfilename = imgroot+".reg"
-        out_table = Table(sourcecatalogdict[imgname]["catalog_table"])
-        out_table.write(regfilename, include_names=["xcentroid", "ycentroid"], format="ascii.fast_commented_header")
-        print("Wrote region file {}\n".format(regfilename))
+        numSci = amutils.countExtn(imghdu)
+        # Allow user to decide when and how to write out catalogs to files
+        if output:
+            for chip in range(1,numSci+1):
+                regfilename = "{}_sci{}_src.reg".format(imgroot, chip)
+                out_table = Table(sourcecatalogdict[imgname]["catalog_table"][chip])
+                out_table.write(regfilename, include_names=["xcentroid", "ycentroid"], format="ascii.fast_commented_header")
+                print("Wrote region file {}\n".format(regfilename))
         imghdu.close()
     return(sourcecatalogdict)
 # ======================================================================================================================

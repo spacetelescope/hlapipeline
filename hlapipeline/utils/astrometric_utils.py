@@ -440,7 +440,85 @@ def classify_sources(catalog, sources=None):
 
     return srctype
 
-def generate_source_catalog(image, refwcs, **kwargs):
+def generate_source_catalog(image, **kwargs):
+    """ Build source catalogs for each chip using photutils.
+
+    The catalog returned by this function includes sources found in all chips
+    of the input image with the positions translated to the coordinate frame
+    defined by the reference WCS `refwcs`.  The sources will be
+      - identified using photutils segmentation-based source finding code
+      - ignore any input pixel which has been flagged as 'bad' in the DQ
+        array, should a DQ array be found in the input HDUList.
+      - classified as probable cosmic-rays (if enabled) using central_moments
+        properties of each source, with these sources being removed from the
+        catalog.
+
+    Parameters
+    -----------
+    image : HDUList object
+        Input image as an astropy.io.fits HDUList object
+
+    dqname : string
+        EXTNAME for the DQ array, if present, in the input image HDUList.
+
+    output : boolean
+        Specify whether or not to write out a separate catalog file for all the
+        sources found in each chip.  Default: None (False)
+
+    Optional Parameters
+    --------------------
+    threshold : float, optional
+        This parameter controls the S/N threshold used for identifying sources in
+        the image relative to the background RMS in much the same way that
+        the 'threshold' parameter in 'tweakreg' works.
+        Default: 1000.
+
+    fwhm : float, optional
+        FWHM (in pixels) of the expected sources from the image, comparable to the
+        'conv_width' parameter from 'tweakreg'.  Objects with FWHM closest to
+        this value will be identified as sources in the catalog. Default: 3.0.
+
+    Returns
+    --------
+    source_cats : dict
+        Dict of astropy Tables identified by chip number with
+        each table containing sources from image extension `('sci',chip)`.
+
+    """
+    dqname = kwargs.get('dqname','DQ')
+    output = kwargs.get('output',None)
+    # Build source catalog for entire image
+    source_cats = {}
+    numSci = countExtn(image, extname='SCI')
+
+    for chip in range(numSci):
+        chip += 1
+        # find sources in image
+        if output:
+            rootname = image[0].header['rootname']
+            outroot = '{}_sci{}_src'.format(rootname, chip)
+            kwargs['output'] = outroot
+        imgarr = image['sci',chip].data
+
+        if 'photmode' in image[0].header:
+            photmode = image[0].header['photmode']
+        else:
+            photmode = image['sci',chip].header['photmode']
+
+        # apply any DQ array, if available
+        if image.index_of(dqname):
+            dqarr = image[dqname,chip].data
+            dqmask = bitmask.bitfield_to_boolean_mask(dqarr, good_mask_value=False)
+            imgarr[dqmask] = 0. # zero-out all pixels flagged as bad
+        seg_tab, segmap = extract_sources(imgarr, **kwargs)
+        seg_tab_phot = compute_photometry(seg_tab,photmode)
+
+        source_cats[chip] = seg_tab_phot
+
+    return source_cats
+
+
+def generate_sky_catalog(image, refwcs, **kwargs):
     """Build source catalog from input image using photutils.
 
     This script borrows heavily from build_source_catalog
@@ -470,6 +548,8 @@ def generate_source_catalog(image, refwcs, **kwargs):
         Specify whether or not to write out a separate catalog file for all the
         sources found in each chip.  Default: None (False)
 
+    Optional Parameters
+    --------------------
     threshold : float, optional
         This parameter controls the S/N threshold used for identifying sources in
         the image relative to the background RMS in much the same way that
@@ -490,8 +570,9 @@ def generate_source_catalog(image, refwcs, **kwargs):
 
 
     """
-    dqname = kwargs.get('dqname','DQ')
-    output = kwargs.get('output',None)
+    # Extract source catalogs for each chip
+    source_cats = generate_source_catalog(image, **kwargs)
+
     # Build source catalog for entire image
     master_cat = None
     numSci = countExtn(image, extname='SCI')
@@ -500,26 +581,10 @@ def generate_source_catalog(image, refwcs, **kwargs):
         refwcs = build_reference_wcs([image])
     for chip in range(numSci):
         chip += 1
-        # find sources in image
-        if output:
-            rootname = image[0].header['rootname']
-            outroot = '{}_sci{}_src'.format(rootname, chip)
-            kwargs['output'] = outroot
-        imgarr = image['sci',chip].data
+        # work with sources identified from this specific chip
+        seg_tab_phot = source_cats[chip]
 
-        if 'photmode' in image[0].header:
-            photmode = image[0].header['photmode']
-        else:
-            photmode = image['sci',chip].header['photmode']
-
-        # apply any DQ array, if available
-        if image.index_of(dqname):
-            dqarr = image[dqname,chip].data
-            dqmask = bitmask.bitfield_to_boolean_mask(dqarr, good_mask_value=False)
-            imgarr[dqmask] = 0. # zero-out all pixels flagged as bad
-        seg_tab, segmap = extract_sources(imgarr, **kwargs)
-        seg_tab_phot = compute_photometry(seg_tab,photmode)
-        # Convert to sky coordinates
+        # Convert pixel coordinates from this chip to sky coordinates
         chip_wcs = wcsutil.HSTWCS(image,ext=('sci',chip))
         seg_ra,seg_dec = chip_wcs.all_pix2world(seg_tab_phot['xcentroid'],seg_tab_phot['ycentroid'],1)
         # Convert sky positions to pixel positions in the reference WCS frame

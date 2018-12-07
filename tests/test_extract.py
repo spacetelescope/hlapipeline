@@ -3,6 +3,7 @@ import traceback
 import os
 import pytest
 from astropy.table import Table
+from astropy.io import fits
 
 import tweakwcs
 from base_test import BaseHLATest
@@ -44,7 +45,7 @@ class TestPipeline(BaseHLATest):
                                  ('J8D806010','j8d806bgq_sky_cat.ecsv'),
                                  ('IB2V09010', 'ib2v09kzq_sky_cat.ecsv')]
                             )
-    def test_generate_catalog(self,input_filenames, truth_file):
+    def XXtest_generate_catalog(self,input_filenames, truth_file):
         """ Verify whether sources from astrometric catalogs can be extracted from images.
 
         Success Criteria
@@ -95,3 +96,59 @@ class TestPipeline(BaseHLATest):
             sys.exit()
 
         assert (nmatches > 0.8*num_expected)
+
+    @pytest.mark.parametrize("input_filenames",
+                                [('j8ep04lwq')]
+                            )
+    def test_pipeline(self, input_filenames):
+        """Test of new pipeline alignment components (call separately)
+
+        This test performs separate fits to each chip separately.
+
+        Success Criteria
+        -----------------
+          * nmatches > 0 on all chips
+          * xrms and yrms < 30mas on all chips
+
+        """
+        self.input_loc = 'catalog_tests'
+        self.curdir = os.getcwd()
+        truth_path = [self.input_repo, self.tree, self.input_loc, *self.ref_loc]
+
+        if not isinstance(input_filenames, list):
+            input_filenames = [input_filenames]
+        try:
+            # Make local copies of input files
+            local_files = []
+            for infile in input_filenames:
+                downloaded_files = self.get_input_file(infile, docopy=True)
+                local_files.extend(downloaded_files)
+            # generate reference catalog
+            refcat = amutils.create_astrometric_catalog(local_files, catalog='GAIADR2')
+
+            # Generate source catalogs for each input image
+            source_catalogs = alignimages.generate_source_catalogs(local_files)
+
+            # Convert input images to tweakwcs-compatible NDData objects and
+            # attach source catalogs to them.
+            imglist = []
+            for group_id,image in enumerate(local_files):
+                imglist.extend(amutils.build_nddata(image, group_id,
+                                                    source_catalogs[image]['catalog_table']))
+
+            # Specify matching algorithm to use
+            match = TPMatch(searchrad=250, separation=0.1, tolerance=5, use2dhist=True)
+
+            # Align images and correct WCS
+            tweakwcs.tweak_image_wcs(imglist, refcat, match=match)
+
+            # Review quality of alignment
+            for chip in imglist:
+                tweak_info = chip.meta.get('tweakwcs_info', None)
+                # determine 30mas limit in pixels
+                xylimit = 0.030 / chip.wcs.pscale
+                # Perform comparisons
+                nmatches = tweak_info['nmatches']
+                xrms = tweak_info['xrms']
+                yrms = tweak_info['yrms']
+                assert(nmatches > 0 and xrms < xylimit and yrms < xylimit)
