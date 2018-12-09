@@ -324,9 +324,11 @@ def extract_sources(img, **pars):
         Full-width half-maximum (fwhm) of the PSF in pixels.
         Default: 3.0
 
-    threshold : float
-        Value from the image which serves as the limit for determining sources
-        Default: background+3*rms(background)
+    threshold : float or None
+        Value from the image which serves as the limit for determining sources.
+        If None, compute a default value of (background+3*rms(background)).
+        If threshold < 0.0, use absolute value as scaling factor for default value.
+        Default: None
 
     source_box : int
         Size of box (in pixels) which defines the minimum size of a valid source
@@ -356,11 +358,16 @@ def extract_sources(img, **pars):
     plot = pars.get('plot', False)
     vmax = pars.get('vmax', None)
 
-    if threshold is None:
+    if threshold is None or threshold < 0.0:
         bkg_estimator = MedianBackground()
         bkg = Background2D(img, (50, 50), filter_size=(3, 3),
                            bkg_estimator=bkg_estimator)
-        threshold = bkg.background + (3. * bkg.background_rms)
+        default_threshold = bkg.background + (3. * bkg.background_rms)
+        if threshold is not None and threshold < 0.0:
+            threshold = -1*threshold*default_threshold
+            print("{} based on {}".format(threshold.max(), default_threshold.max()))
+        else:
+            threshold = default_threshold
     sigma = fwhm * gaussian_fwhm_to_sigma
     kernel = Gaussian2DKernel(sigma, x_size=source_box, y_size=source_box)
     kernel.normalize()
@@ -387,7 +394,7 @@ def extract_sources(img, **pars):
         tbl['cyy'].info.format = '.10f'
         if not output.endswith('.cat'):
             output += '.cat'
-        tbl.write(output, format='ascii.no_header')
+        tbl.write(output, format='ascii.commented_header')
         print("Wrote source catalog: {}".format(output))
 
     if plot:
@@ -468,10 +475,11 @@ def generate_source_catalog(image, **kwargs):
     Optional Parameters
     --------------------
     threshold : float, optional
-        This parameter controls the S/N threshold used for identifying sources in
-        the image relative to the background RMS in much the same way that
-        the 'threshold' parameter in 'tweakreg' works.
-        Default: 1000.
+        This parameter controls the threshold used for identifying sources in
+        the image relative to the background RMS.
+        If None, compute a default value of (background+3*rms(background)).
+        If threshold < 0.0, use absolute value as scaling factor for default value.
+        Default: None
 
     fwhm : float, optional
         FWHM (in pixels) of the expected sources from the image, comparable to the
@@ -485,6 +493,8 @@ def generate_source_catalog(image, **kwargs):
         each table containing sources from image extension `('sci',chip)`.
 
     """
+    if not isinstance(image, pf.HDUList):
+        raise ValueError("Input {} not fits.HDUList object".format(image))
     dqname = kwargs.get('dqname','DQ')
     output = kwargs.get('output',None)
     # Build source catalog for entire image
