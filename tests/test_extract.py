@@ -3,11 +3,12 @@ import traceback
 import os
 import pytest
 from astropy.table import Table
+from astropy.io import fits
 
 import tweakwcs
 from base_test import BaseHLATest
 import hlapipeline.utils.astrometric_utils as amutils
-from hlapipeline.alignimages import generate_source_catalogs
+from hlapipeline.alignimages import generate_source_catalogs, detector_specific_params
 from ci_watson.artifactory_helpers import get_bigdata
 
 
@@ -65,10 +66,15 @@ class TestPipeline(BaseHLATest):
             for infile in input_filenames:
                 downloaded_files = self.get_input_file(infile, docopy=True)
                 local_files.extend(downloaded_files)
-
+            
+            test_image = local_files[0]
+            print("Testing with {}".format(test_image))
+            imghdu = fits.open(test_image)
+            instrume = imghdu[0].header['instrume'].lower()
+            detector = imghdu[0].header['detector'].lower()
+            instr_pars = detector_specific_params[instrume][detector]
             reference_wcs = amutils.build_reference_wcs(local_files)
-            input_catalog_dict = generate_source_catalogs([local_files[0]], reference_wcs)
-            imcat = input_catalog_dict[local_files[0]]['catalog_table']
+            imcat = amutils.generate_sky_catalog(imghdu, reference_wcs, **instr_pars)
             imcat.rename_column('xcentroid', 'x')
             imcat.rename_column('ycentroid', 'y')
 
@@ -85,7 +91,7 @@ class TestPipeline(BaseHLATest):
             num_expected = len(reference_table)
 
             # Perform matching
-            match = tweakwcs.TPMatch(searchrad=5, separation=0.1, tolerance=5, use2dhist=True)
+            match = tweakwcs.TPMatch(searchrad=200, separation=0.1, tolerance=5, use2dhist=True)
             ridx, iidx = match(reference_table, imcat, wcs_corrector)
             nmatches = len(ridx)
 
@@ -95,3 +101,76 @@ class TestPipeline(BaseHLATest):
             sys.exit()
 
         assert (nmatches > 0.8*num_expected)
+
+    @pytest.mark.parametrize("input_filenames",
+                                [('j8ep04lwq')]
+                            )
+    def test_pipeline(self, input_filenames):
+        """Test of new pipeline alignment components (call separately)
+
+        This test performs separate fits to each chip separately.
+
+        Success Criteria
+        -----------------
+          * nmatches > 0 on all chips
+          * xrms and yrms < 30mas on all chips
+
+        """
+        self.input_loc = 'catalog_tests'
+        self.curdir = os.getcwd()
+        truth_path = [self.input_repo, self.tree, self.input_loc, *self.ref_loc]
+
+        if not isinstance(input_filenames, list):
+            input_filenames = [input_filenames]
+
+        # Use this to collect all failures BEFORE throwing AssertionError
+        failures=False  
+        try:
+            # Make local copies of input files
+            local_files = []
+            for infile in input_filenames:
+                downloaded_files = self.get_input_file(infile, docopy=True)
+                local_files.extend(downloaded_files)
+            # generate reference catalog
+            refcat = amutils.create_astrometric_catalog(local_files, catalog='GAIADR2')
+
+            # Generate source catalogs for each input image
+            source_catalogs = generate_source_catalogs(local_files, None)
+
+            # Convert input images to tweakwcs-compatible NDData objects and
+            # attach source catalogs to them.
+            imglist = []
+            for group_id,image in enumerate(local_files):
+                imglist.extend(amutils.build_nddata(image, group_id,
+                                                    source_catalogs[image]['catalog_table']))
+
+            # Specify matching algorithm to use
+            match = tweakwcs.TPMatch(searchrad=250, separation=0.1, 
+                                     tolerance=5, use2dhist=True)
+
+            # Align images and correct WCS
+            tweakwcs.tweak_image_wcs(imglist, refcat, match=match)
+        except Exception:
+            failures = True
+            print("ALIGNMENT EXCEPTION:  Failed to align {}".format(infile))
+
+        if not failures:
+            for chip in imglist:
+                tweak_info = chip.meta.get('tweakwcs_info', None)
+                chip_id = chip.meta.get('chip_id',1)
+                # determine 30mas limit in pixels
+                xylimit = 30
+                # Perform comparisons
+                nmatches = tweak_info['nmatches']
+                xrms,yrms = tweak_info['rms']
+                xrms *= chip.wcs.pscale*1000
+                yrms *= chip.wcs.pscale*1000
+                if any([nmatches==0, xrms>xylimit, yrms>xylimit]):
+                    failures = True
+                    msg1 = "Observation {}[{}] failed alignment with "
+                    msg2 = "    RMS=({:.4f},{:.4f})mas [limit:{:.4f}mas] and NMATCHES={}"
+                    print(msg1.format(infile, chip_id))
+                    print(msg2.format(xrms, yrms, xylimit, nmatches))
+            
+        assert(not failures)
+    
