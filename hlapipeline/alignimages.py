@@ -183,7 +183,7 @@ def perform_align(input_list):
                     return
             else:
                 print("\nSUCCESS")
-                print("-------------------- STEP 6a: Cross matching --------------------")
+                print("-------------------- STEP 6b: Fitting --------------------")
 
                 return
         else:
