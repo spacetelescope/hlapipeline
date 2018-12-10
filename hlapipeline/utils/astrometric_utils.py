@@ -134,6 +134,9 @@ def create_astrometric_catalog(inputs, **pars):
         Specify whether or not to only use sources from GAIA in output catalog
         Default: False
 
+    existing_wcs : HST.wcs object
+        existing WCS object specified by the user
+
     note ::
         This function will point to astrometric catalog web service defined
         through the use of the ASTROMETRIC_CATALOG_URL environment variable.
@@ -149,6 +152,7 @@ def create_astrometric_catalog(inputs, **pars):
     output = pars.get("output", 'ref_cat.ecsv')
     gaia_only = pars.get("gaia_only", False)
     table_format = pars.get("table_format", 'ascii.ecsv')
+    existing_wcs = pars.get("existing_wcs", None)
 
     inputs, _ = parseinput.parseinput(inputs)
     # start by creating a composite field-of-view for all inputs
@@ -156,7 +160,10 @@ def create_astrometric_catalog(inputs, **pars):
     # as the first chip in the list, which for WFPC2 data means the PC.
     # Fortunately, for alignment, this doesn't matter since no resampling of
     # data will be performed
-    outwcs = build_reference_wcs(inputs)
+    if existing_wcs:
+        outwcs = existing_wcs
+    else:
+        outwcs = build_reference_wcs(inputs)
     radius = compute_radius(outwcs)
     ra, dec = outwcs.wcs.crval
 
@@ -449,7 +456,6 @@ def classify_sources(catalog, sources=None):
 
 def generate_source_catalog(image, **kwargs):
     """ Build source catalogs for each chip using photutils.
-
     The catalog returned by this function includes sources found in all chips
     of the input image with the positions translated to the coordinate frame
     defined by the reference WCS `refwcs`.  The sources will be
