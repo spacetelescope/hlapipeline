@@ -12,6 +12,7 @@ import os
 import pdb
 from stwcs.wcsutil import HSTWCS
 import sys
+import tweakwcs
 from utils import astrometric_utils as amutils
 from utils import astroquery_utils as aqutils
 from utils import filter
@@ -145,36 +146,39 @@ def perform_align(input_list):
         print("Astrometric Catalog: ",catalogList[catalogIndex])
         reference_catalog = generate_astrometric_catalog(processList, catalog=catalogList[catalogIndex])
         # The table must have at least MIN_CATALOG_THRESHOLD entries to be useful
-        # if len(reference_catalog) < MIN_CATALOG_THRESHOLD:
-        #     print("Not enough sources found in catalog" + catalogList[catalogIndex])
-        #     catalogIndex += 1
-        #     if catalogIndex <= (numCatalogs - 1):
-        #         print("Try again with the next catalog")
-        #         continue
-        #     else:
-        #         print("Not enough sources found in any catalog - no processing done.")
-        #         return
         if len(reference_catalog) >= MIN_CATALOG_THRESHOLD:
             print("\nSUCCESS")
         # 5: Extract catalog of observable sources from each input image
             print("-------------------- STEP 5: Source finding --------------------")
             extracted_sources = generate_source_catalogs(processList)
             for imgname in extracted_sources.keys():
+                table=extracted_sources[imgname]["catalog_table"]
                 # The catalog of observable sources must have at least MIN_OBSERVABLE_THRESHOLD entries to be useful
-                # TODO *** Is this no hope or iterate on threshold or ???
-                if len(extracted_sources[imgname]["catalog_table"]) < MIN_OBSERVABLE_THRESHOLD:
-                    print("Not enough sources ({}) found in image {}".format(len(extracted_sources[imgname]["catalog_table"]),imgname))
+                total_num_sources = 0
+                for chipnum in table.keys():
+                    total_num_sources += len(table[chipnum])
+                if total_num_sources < MIN_OBSERVABLE_THRESHOLD:
+                    print("Not enough sources ({}) found in image {}".format(total_num_sources,imgname))
                     return
-
+            # Convert input images to tweakwcs-compatible NDData objects and
+            # attach source catalogs to them.
+            imglist = []
+            for group_id, image in enumerate(processList):
+                imglist.extend(amutils.build_nddata(image, group_id,
+                                                    extracted_sources[image]['catalog_table']))
             print("\nSUCCESS")
 
         # 6: Cross-match source catalog with astrometric reference source catalog, Perform fit between source catalog and reference catalog
             print("-------------------- STEP 6: Cross matching and fitting --------------------")
-            print("-------------------- STEP 6a: Cross matching --------------------")
-            # TODO *** catalog cross match call here
-            out_catalog=[0,0,0,0] # *** PLACEHOLDER
+            # Specify matching algorithm to use
+            match = tweakwcs.TPMatch(searchrad=250, separation=0.1,
+                                     tolerance=250, use2dhist=False)
+            # Align images and correct WCS
+            tweakwcs.tweak_image_wcs(imglist, reference_catalog, match=match)
+            pdb.set_trace()
+
             if len(out_catalog) <= MIN_CROSS_MATCHES:
-                if catalogIndex < len(catalogList) -1:
+                if catalogIndex < numCatalogs-1:
                     print("Not enough cross matches found between astrometric catalog and sources found in images")
                     print("Try again with the next catalog")
                     catalogIndex += 1
@@ -183,11 +187,11 @@ def perform_align(input_list):
                     return
             else:
                 print("\nSUCCESS")
-                print("-------------------- STEP 6b: Fitting --------------------")
+
 
                 return
         else:
-            if catalogIndex < len(catalogList)-1:
+            if catalogIndex < numCatalogs-1:
                 print("Not enough sources found in catalog" + catalogList[catalogIndex])
                 print("Try again with the next catalog")
                 catalogIndex += 1
