@@ -7,10 +7,10 @@ can be reconciled against an astrometric catalog and, for multiple images, used 
 a mosaic.
 
 """
-from astropy.io import fits
+from astropy.io.fits import getheader
 from astropy.table import Table
 import math
-
+import pdb
 __all__ = ['analyze_data']
 
 def analyze_data(inputFileList, **kwargs):
@@ -82,11 +82,16 @@ def analyze_data(inputFileList, **kwargs):
     for inputFile in inputFileList:
 
         header_hdu  = 0
-        header_data = fits.getheader(inputFile, header_hdu)
+        header_data = getheader(inputFile, header_hdu)
 
+        # Keywords to use potentially for analysis
+        instrume = (header_data['INSTRUME']).upper()
+        detector = (header_data['DETECTOR']).upper()
+        subarray = header_data['SUBARRAY']
+        dateObs  = header_data['DATE-OBS']
         obstype  = (header_data[OBSKEY]).upper()
         mtflag   = (header_data[MTKEY]).upper()
-
+        
         # Keywords to use potentially for analysis
         instrume = (header_data['INSTRUME']).upper()
         detector = (header_data['DETECTOR']).upper()
@@ -134,7 +139,6 @@ def analyze_data(inputFileList, **kwargs):
         elif mtflag == 'T':
             noProcKey   = MTKEY
             noProcValue = mtflag 
-
         # Bostrophidon without or with dwell (WFC3 only)
         elif any ([scan_typ == 'C', scan_typ == 'D']):
             noProcKey   = SCNKEY
