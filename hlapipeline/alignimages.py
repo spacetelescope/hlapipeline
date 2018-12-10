@@ -170,8 +170,9 @@ def perform_align(input_list):
 
         # 6: Cross-match source catalog with astrometric reference source catalog, Perform fit between source catalog and reference catalog
             print("-------------------- STEP 6: Cross matching and fitting --------------------")
+            print("-------------------- STEP 6a: Cross matching --------------------")
             # TODO *** catalog cross match call here
-            out_catalog=[] # *** PLACEHOLDER
+            out_catalog=[0,0,0,0] # *** PLACEHOLDER
             if len(out_catalog) <= MIN_CROSS_MATCHES:
                 if catalogIndex < len(catalogList) -1:
                     print("Not enough cross matches found between astrometric catalog and sources found in images")
@@ -182,6 +183,8 @@ def perform_align(input_list):
                     return
             else:
                 print("\nSUCCESS")
+                print("-------------------- STEP 6a: Cross matching --------------------")
+
                 return
         else:
             if catalogIndex < len(catalogList)-1:
