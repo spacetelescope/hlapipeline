@@ -6,6 +6,7 @@
 
 from astropy.io import fits
 from astropy.table import Table
+from collections import OrderedDict
 import glob
 import numpy as np
 import os
@@ -176,11 +177,24 @@ def perform_align(input_list):
                                      tolerance=250, use2dhist=False)
             # Align images and correct WCS
             tweakwcs.tweak_image_wcs(imglist, reference_catalog, match=match)
+
+            tweakwcs_info_keys = OrderedDict(imglist[0].meta['tweakwcs_info']).keys()
+            imgctr=0
             for item in imglist:
                 max_rms_val = max(item.meta['tweakwcs_info']['rms'])
                 num_xmatches = item.meta['tweakwcs_info']['nmatches']
-                print(item.meta['tweakwcs_info'])
-                print()
+                # print fit params to screen
+                print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ FIT PARAMETERS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+                if item.meta['chip'] == 1:
+                    image_name = processList[imgctr]
+                    imgctr += 1
+                print("image: {}".format(image_name))
+                print("chip: {}".format(item.meta['chip']))
+                print("group_id: {}".format(item.meta['group_id']))
+                for tweakwcs_info_key in tweakwcs_info_keys:
+                    if not tweakwcs_info_key.startswith("matched"):
+                        print("{} : {}".format(tweakwcs_info_key,item.meta['tweakwcs_info'][tweakwcs_info_key]))
+                print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
 
                 if num_xmatches < MIN_CROSS_MATCHES:
                     if catalogIndex < numCatalogs-1:
@@ -211,6 +225,9 @@ def perform_align(input_list):
                 print("Not enough sources found in any catalog - no processing done.")
                 return(1)
     print("\nSUCCESS")
+    
+    # 7: Write new fit solution to input image headers
+
     return (0)
 
 
