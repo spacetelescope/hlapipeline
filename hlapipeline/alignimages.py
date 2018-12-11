@@ -21,6 +21,7 @@ MIN_CATALOG_THRESHOLD = 3
 MIN_OBSERVABLE_THRESHOLD = 10
 MIN_CROSS_MATCHES = 3
 MIN_FIT_MATCHES = 6
+MAX_FIT_RMS = 1.0
 
 # Module-level dictionary contains instrument/detector-specific parameters used later on in the script.
 detector_specific_params = {"acs":
@@ -102,7 +103,7 @@ def perform_align(input_list):
 
     Returns
     -------
-    Nothing for now.
+    int value 0 if successful, int value 1 if unsuccessful
 
     """
 
@@ -124,7 +125,7 @@ def perform_align(input_list):
     # for alignment purposes.
     if filteredTable['doProcess'].sum() == 0:
         print("No viable images in filtered table - no processing done.\n")
-        return
+        return(1)
 
     # Get the list of all "good" files to use for the alignment
     processList = filteredTable['imageName'][np.where(filteredTable['doProcess'])]
@@ -141,7 +142,6 @@ def perform_align(input_list):
     doneFitting = False
     catalogIndex = 0
     while not doneFitting:
-        print(">>>>>>> CATALOG INDEX: ",catalogIndex)
         print("-------------------- STEP 4: Detect astrometric sources --------------------")
         print("Astrometric Catalog: ",catalogList[catalogIndex])
         reference_catalog = generate_astrometric_catalog(processList, catalog=catalogList[catalogIndex])
@@ -150,16 +150,17 @@ def perform_align(input_list):
             print("\nSUCCESS")
         # 5: Extract catalog of observable sources from each input image
             print("-------------------- STEP 5: Source finding --------------------")
-            extracted_sources = generate_source_catalogs(processList)
-            for imgname in extracted_sources.keys():
-                table=extracted_sources[imgname]["catalog_table"]
-                # The catalog of observable sources must have at least MIN_OBSERVABLE_THRESHOLD entries to be useful
-                total_num_sources = 0
-                for chipnum in table.keys():
-                    total_num_sources += len(table[chipnum])
-                if total_num_sources < MIN_OBSERVABLE_THRESHOLD:
-                    print("Not enough sources ({}) found in image {}".format(total_num_sources,imgname))
-                    return
+            if catalogIndex == 0:
+                extracted_sources = generate_source_catalogs(processList)
+                for imgname in extracted_sources.keys():
+                    table=extracted_sources[imgname]["catalog_table"]
+                    # The catalog of observable sources must have at least MIN_OBSERVABLE_THRESHOLD entries to be useful
+                    total_num_sources = 0
+                    for chipnum in table.keys():
+                        total_num_sources += len(table[chipnum])
+                    if total_num_sources < MIN_OBSERVABLE_THRESHOLD:
+                        print("Not enough sources ({}) found in image {}".format(total_num_sources,imgname))
+                        return(1)
             # Convert input images to tweakwcs-compatible NDData objects and
             # attach source catalogs to them.
             imglist = []
@@ -175,21 +176,32 @@ def perform_align(input_list):
                                      tolerance=250, use2dhist=False)
             # Align images and correct WCS
             tweakwcs.tweak_image_wcs(imglist, reference_catalog, match=match)
-            pdb.set_trace()
+            for item in imglist:
+                max_rms_val = max(item.meta['tweakwcs_info']['rms'])
+                num_xmatches = item.meta['tweakwcs_info']['nmatches']
+                print(item.meta['tweakwcs_info'])
+                print()
 
-            if len(out_catalog) <= MIN_CROSS_MATCHES:
-                if catalogIndex < numCatalogs-1:
-                    print("Not enough cross matches found between astrometric catalog and sources found in images")
-                    print("Try again with the next catalog")
-                    catalogIndex += 1
+                if num_xmatches < MIN_CROSS_MATCHES:
+                    if catalogIndex < numCatalogs-1:
+                        print("Not enough cross matches found between astrometric catalog and sources found in images")
+                        print("Try again with the next catalog")
+                        catalogIndex += 1
+                        break
+                    else:
+                        print("Not enough cross matches found in any catalog - no processing done.")
+                        return(1)
+                elif max_rms_val > MAX_FIT_RMS:
+                    if catalogIndex < numCatalogs-1:
+                        print("Fit RMS value(s) X_rms= {}, Y_rms = {} greater than the maximum threshold value {}.".format(item.meta['tweakwcs_info']['rms'][0], item.meta['tweakwcs_info']['rms'][1],MAX_FIT_RMS))
+                        print("Try again with the next catalog")
+                        catalogIndex += 1
+                        break
+                    else:
+                        print("Fit RMS values too large using any catalog - no processing done.")
+                        return(1)
                 else:
-                    print("Not enough cross matches found in any catalog - no processing done.")
-                    return
-            else:
-                print("\nSUCCESS")
-
-
-                return
+                    print("Fit calculations successful.")
         else:
             if catalogIndex < numCatalogs-1:
                 print("Not enough sources found in catalog" + catalogList[catalogIndex])
@@ -197,7 +209,9 @@ def perform_align(input_list):
                 catalogIndex += 1
             else:
                 print("Not enough sources found in any catalog - no processing done.")
-                return
+                return(1)
+    print("\nSUCCESS")
+    return (0)
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -311,5 +325,5 @@ if __name__ == '__main__':
 
 
     # Get to it!
-    perform_align(input_list)
+    return_value = perform_align(input_list)
 
