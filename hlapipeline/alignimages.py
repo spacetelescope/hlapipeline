@@ -37,7 +37,7 @@ detector_specific_params = {"acs":
                                  "wfc":
                                      {"fwhmpsf": 0.076,
                                       "classify": True,
-                                      "threshold": None}},  # TODO: Verify ACS fwhmpsf values
+                                      "threshold": None}},
                             "wfc3":
                                 {"ir":
                                      {"fwhmpsf": 0.14,
@@ -46,7 +46,7 @@ detector_specific_params = {"acs":
                                  "uvis":
                                      {"fwhmpsf": 0.076,
                                       "classify": True,
-                                      "threshold": None}}}
+                                      "threshold": None}}} # fwhmpsf in units of arcsec
 # ----------------------------------------------------------------------------------------------------------------------
 
 
@@ -225,7 +225,7 @@ def perform_align(input_list):
                 print("Not enough sources found in any catalog - no processing done.")
                 return(1)
     print("\nSUCCESS")
-    
+
     # 7: Write new fit solution to input image headers
 
     return (0)
@@ -303,7 +303,7 @@ def generate_source_catalogs(imglist, **pars):
 
         # Identify sources in image, convert coords from chip x, y form to reference WCS sky RA, Dec form.
         imgwcs = HSTWCS(imghdu, 1)
-        fwhmpsf_pix = sourcecatalogdict[imgname]["params"]['fwhmpsf']/imgwcs.pscale
+        fwhmpsf_pix = sourcecatalogdict[imgname]["params"]['fwhmpsf']/imgwcs.pscale #Convert fwhmpsf from arsec to pixels
         sourcecatalogdict[imgname]["catalog_table"] = amutils.generate_source_catalog(imghdu, fwhm=fwhmpsf_pix, **pars)
 
         # write out coord lists to files for diagnostic purposes. Protip: To display the sources in these files in DS9,
