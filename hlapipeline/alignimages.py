@@ -24,7 +24,7 @@ MIN_CATALOG_THRESHOLD = 3
 MIN_OBSERVABLE_THRESHOLD = 10
 MIN_CROSS_MATCHES = 3
 MIN_FIT_MATCHES = 6
-MAX_FIT_RMS = 10.0 #TODO: change back to 1.0
+MAX_FIT_RMS = 1.0
 
 # Module-level dictionary contains instrument/detector-specific parameters used later on in the script.
 detector_specific_params = {"acs":
