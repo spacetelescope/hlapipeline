@@ -214,6 +214,7 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
             tweakwcs_info_keys = OrderedDict(imglist[0].meta['tweakwcs_info']).keys()
             imgctr=0
             for item in imglist:
+                retry_fit = False
                 max_rms_val = max(item.meta['tweakwcs_info']['rms'])
                 num_xmatches = item.meta['tweakwcs_info']['nmatches']
                 # print fit params to screen
@@ -234,6 +235,7 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
                         print("Not enough cross matches found between astrometric catalog and sources found in images")
                         print("Try again with the next catalog")
                         catalogIndex += 1
+                        retry_fit = True
                         break
                     else:
                         print("Not enough cross matches found in any catalog - no processing done.")
@@ -243,22 +245,24 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
                         print("Fit RMS value(s) X_rms= {}, Y_rms = {} greater than the maximum threshold value {}.".format(item.meta['tweakwcs_info']['rms'][0], item.meta['tweakwcs_info']['rms'][1],MAX_FIT_RMS))
                         print("Try again with the next catalog")
                         catalogIndex += 1
+                        retry_fit = True
                         break
                     else:
                         print("Fit RMS values too large using any catalog - no processing done.")
                         return(1)
                 else:
                     print("Fit calculations successful.")
-            print("\nSUCCESS")
-
-            # 7: Write new fit solution to input image headers
-            print("-------------------- STEP 7: Update image headers with new WCS information --------------------")
-            if update_hdr_wcs:
-                update_image_wcs_info(imglist, processList)
+            if not retry_fit:
                 print("\nSUCCESS")
-            else:
-                print("\n STEP SKIPPED")
-            return (0)
+
+                # 7: Write new fit solution to input image headers
+                print("-------------------- STEP 7: Update image headers with new WCS information --------------------")
+                if update_hdr_wcs:
+                    update_image_wcs_info(imglist, processList)
+                    print("\nSUCCESS")
+                else:
+                    print("\n STEP SKIPPED")
+                return (0)
         else:
             if catalogIndex < numCatalogs-1:
                 print("Not enough sources found in catalog" + catalogList[catalogIndex])
