@@ -7,10 +7,12 @@
 from astropy.io import fits
 from astropy.table import Table
 from collections import OrderedDict
+from drizzlepac import updatehdr
 import glob
 import numpy as np
 import os
 import pdb
+from stsci.tools import fileutil
 from stwcs.wcsutil import HSTWCS
 import sys
 import tweakwcs
@@ -22,7 +24,7 @@ MIN_CATALOG_THRESHOLD = 3
 MIN_OBSERVABLE_THRESHOLD = 10
 MIN_CROSS_MATCHES = 3
 MIN_FIT_MATCHES = 6
-MAX_FIT_RMS = 1.0
+MAX_FIT_RMS = 10.0 #TODO: change back to 1.0
 
 # Module-level dictionary contains instrument/detector-specific parameters used later on in the script.
 detector_specific_params = {"acs":
@@ -47,6 +49,8 @@ detector_specific_params = {"acs":
                                      {"fwhmpsf": 0.076,
                                       "classify": True,
                                       "threshold": None}}} # fwhmpsf in units of arcsec
+
+
 # ----------------------------------------------------------------------------------------------------------------------
 
 
@@ -94,13 +98,42 @@ def check_and_get_data(input_list,**pars):
     return(totalInputList)
 
 
-def perform_align(input_list):
+# ----------------------------------------------------------------------------------------------------------------------
+
+def convert_string_tf_to_boolean(invalue):
+    """Converts string 'True' or 'False' value to Boolean True or Boolean False.
+
+    :param invalue: string
+        input true/false value
+
+    :return: Boolean
+        converted True/False value
+    """
+    outvalue = False
+    if invalue == 'True':
+        outvalue = True
+    return(outvalue)
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+
+
+def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False):
     """Main calling function.
 
     Parameters
     ----------
     input_list : list
         List of one or more IPPSSOOTs (rootnames) to align.
+
+    archive : Boolean
+        Retain copies of the downloaded files in the astroquery created sub-directories?
+
+    clobber : Boolean
+        Download and overwrite existing local copies of input files?
+
+    update_hdr_wcs : Boolean
+        Write newly computed WCS information to image image headers?
 
     Returns
     -------
@@ -114,7 +147,7 @@ def perform_align(input_list):
 
     # 1: Interpret input data and optional parameters
     print("-------------------- STEP 1: Get data --------------------")
-    imglist = check_and_get_data(input_list)
+    imglist = check_and_get_data(input_list, archive=archive, clobber=clobber)
     print("\nSUCCESS")
 
     # 2: Apply filter to input observations to insure that they meet minimum criteria for being able to be aligned
@@ -216,6 +249,16 @@ def perform_align(input_list):
                         return(1)
                 else:
                     print("Fit calculations successful.")
+            print("\nSUCCESS")
+
+            # 7: Write new fit solution to input image headers
+            print("-------------------- STEP 7: Update image headers with new WCS information --------------------")
+            if update_hdr_wcs:
+                update_image_wcs_info(imglist, processList)
+                print("\nSUCCESS")
+            else:
+                print("\n STEP SKIPPED")
+            return (0)
         else:
             if catalogIndex < numCatalogs-1:
                 print("Not enough sources found in catalog" + catalogList[catalogIndex])
@@ -224,11 +267,7 @@ def perform_align(input_list):
             else:
                 print("Not enough sources found in any catalog - no processing done.")
                 return(1)
-    print("\nSUCCESS")
 
-    # 7: Write new fit solution to input image headers
-
-    return (0)
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -258,6 +297,8 @@ def generate_astrometric_catalog(imglist, **pars):
 
     print("Wrote reference catalog {}.".format(catalog_fileanme))
     return(out_catalog)
+
+
 # ----------------------------------------------------------------------------------------------------------------------
 
 
@@ -319,14 +360,66 @@ def generate_source_catalogs(imglist, **pars):
                 print("Wrote region file {}\n".format(regfilename))
         imghdu.close()
     return(sourcecatalogdict)
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+
+
+def update_image_wcs_info(tweakwcs_output,imagelist):
+    """Write newly computed WCS information to image headers
+
+    Parameters
+    ----------
+    tweakwcs_output : list
+        output of tweakwcs. Contains sourcelist tables, newly computed WCS info, etc. for every chip of every valid
+        input image.
+
+    imagelist : list
+        list of valid processed images to be updated
+
+    Returns
+    -------
+    Nothing!
+    """
+    imgctr = 0
+    for item in tweakwcs_output:
+        if item.meta['chip'] == 1:  # to get the image name straight regardless of the number of chips
+            image_name = imagelist[imgctr]
+            if imgctr > 0: #close previously opened image
+                print("CLOSE {}".format(hdulist[0].header['FILENAME'])) #TODO: Remove before deployment
+                hdulist.flush()
+                hdulist.close()
+            hdulist = fits.open(image_name, mode='update')
+            sciExtDict = {}
+            for sciExtCtr in range(1, amutils.countExtn(hdulist) + 1): #establish correct mapping to the science extensions
+                sciExtDict["{}".format(sciExtCtr)] = fileutil.findExtname(hdulist,'sci',extver=sciExtCtr)
+            imgctr += 1
+        updatehdr.update_wcs(hdulist, sciExtDict["{}".format(item.meta['chip'])], item.wcs, wcsname='TWEAKDEV', reusename=True, verbose=True) #TODO: May want to settle on a better name for 'wcsname'
+        print()
+    print("CLOSE {}".format(hdulist[0].header['FILENAME'])) #TODO: Remove before deployment
+    hdulist.flush() #close last image
+    hdulist.close()
+
+
 # ======================================================================================================================
 
 
 if __name__ == '__main__':
     import argparse
     PARSER = argparse.ArgumentParser(description='Align images')
-    PARSER.add_argument('raw_input_list', nargs='+', help='A space-separated list of fits files to align, or a simple text '
-                                                     'file containing a list of fits files to align, one per line')
+    PARSER.add_argument('raw_input_list', nargs='+', help='A space-separated list of fits files to align, or a simple '
+                    'text file containing a list of fits files to align, one per line')
+
+    PARSER.add_argument( '-a', '--archive', required=False,choices=['True','False'],default='False',help='Retain '
+                    'copies of the downloaded files in the astroquery created sub-directories? Unless explicitly set, '
+                    'the default is "False".')
+
+    PARSER.add_argument( '-c', '--clobber', required=False,choices=['True','False'],default='False',help='Download and '
+                    'overwrite existing local copies of input files? Unless explicitly set, the default is "False".')
+
+    PARSER.add_argument( '-u', '--update_hdr_wcs', required=False,choices=['True','False'],default='False',help='Write '
+                    'newly computed WCS information to image image headers? Unless explicitly set, the default is '
+                    '"False".')
     ARGS = PARSER.parse_args()
 
     # Build list of input images
@@ -340,7 +433,11 @@ if __name__ == '__main__':
         else:
             input_list.append(item)
 
+    archive = convert_string_tf_to_boolean(ARGS.archive)
 
+    clobber = convert_string_tf_to_boolean(ARGS.clobber)
+
+    update_hdr_wcs = convert_string_tf_to_boolean(ARGS.update_hdr_wcs)
     # Get to it!
-    return_value = perform_align(input_list)
+    return_value = perform_align(input_list,archive,clobber,update_hdr_wcs)
 
