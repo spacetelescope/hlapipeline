@@ -9,6 +9,7 @@ from astropy.table import Table
 from collections import OrderedDict
 from drizzlepac import updatehdr
 import glob
+import math
 import numpy as np
 import os
 import pdb
@@ -207,7 +208,7 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
             print("-------------------- STEP 6: Cross matching and fitting --------------------")
             # Specify matching algorithm to use
             match = tweakwcs.TPMatch(searchrad=250, separation=0.1,
-                                     tolerance=250, use2dhist=False)
+                                     tolerance=100, use2dhist=False)
             # Align images and correct WCS
             tweakwcs.tweak_image_wcs(imglist, reference_catalog, match=match)
 
@@ -228,6 +229,7 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
                 for tweakwcs_info_key in tweakwcs_info_keys:
                     if not tweakwcs_info_key.startswith("matched"):
                         print("{} : {}".format(tweakwcs_info_key,item.meta['tweakwcs_info'][tweakwcs_info_key]))
+                # print("Radial shift: {}".format(math.sqrt(item.meta['tweakwcs_info']['shift'][0]**2+item.meta['tweakwcs_info']['shift'][1]**2)))
                 print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
 
                 if num_xmatches < MIN_CROSS_MATCHES:

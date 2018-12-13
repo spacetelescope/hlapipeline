@@ -369,7 +369,7 @@ def extract_sources(img, **pars):
         bkg_estimator = MedianBackground()
         bkg = Background2D(img, (50, 50), filter_size=(3, 3),
                            bkg_estimator=bkg_estimator)
-        default_threshold = bkg.background + (3. * bkg.background_rms)
+        default_threshold = bkg.background + (4. * bkg.background_rms)
         if threshold is not None and threshold < 0.0:
             threshold = -1*threshold*default_threshold
             print("{} based on {}".format(threshold.max(), default_threshold.max()))
