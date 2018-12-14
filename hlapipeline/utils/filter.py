@@ -144,10 +144,9 @@ def analyze_data(inputFileList, **kwargs):
             noProcKey   = SCNKEY
             noProcValue = scan_typ
 
-        # Filter which begins with !F (e.g., 'POL*' or 'G*')
-        # The sfilter variable may be the concatenation of two filters (f160_clear) - 
-        # look at the first character of each filter to see if the character is !F
-        elif sfilter[0] != 'F' and sfilter[0] != '' and sfilter[0] != 'C' : 
+        # Filter which does not begin with: 'F'(F###), 'C'(CLEAR), 'N'(N/A), and is not blank
+        # The sfilter variable may be the concatenation of two filters (F160_CLEAR)
+        elif sfilter[0] != 'F' and sfilter[0] != '' and sfilter[0] != 'C' and sfilter[0] != 'N': 
             noProcKey   = FILKEY
             noProcValue = sfilter
 
@@ -155,7 +154,7 @@ def analyze_data(inputFileList, **kwargs):
             pos = sfilter.index('_')
             pos += 1
 
-            if sfilter[pos] != 'F' and sfilter[pos] != '' and sfilter[pos] != 'C' : 
+            if sfilter[pos] != 'F' and sfilter[pos] != '' and sfilter[pos] != 'C' and sfilter[pos] != 'N': 
                 noProcKey   = FILKEY
                 noProcValue = sfilter
 
