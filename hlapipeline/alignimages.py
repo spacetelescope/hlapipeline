@@ -17,9 +17,14 @@ from stsci.tools import fileutil
 from stwcs.wcsutil import HSTWCS
 import sys
 import tweakwcs
-from utils import astrometric_utils as amutils
-from utils import astroquery_utils as aqutils
-from utils import filter
+try:
+    from hlapipeline.utils import astrometric_utils as amutils
+    from hlapipeline.utils import astroquery_utils as aqutils
+    from hlapipeline.utils import filter
+except:
+    from utils import astrometric_utils as amutils
+    from utils import astroquery_utils as aqutils
+    from utils import filter
 
 MIN_CATALOG_THRESHOLD = 3
 MIN_OBSERVABLE_THRESHOLD = 10
@@ -40,7 +45,7 @@ detector_specific_params = {"acs":
                                  "wfc":
                                      {"fwhmpsf": 0.076,
                                       "classify": True,
-                                      "threshold": None}},
+                                      "threshold": -1.1}},
                             "wfc3":
                                 {"ir":
                                      {"fwhmpsf": 0.14,
@@ -176,16 +181,30 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
     # While loop to accommodate using multiple catalogs
     doneFitting = False
     catalogIndex = 0
+    extracted_sources = None
     while not doneFitting:
+        skip_all_other_steps = False
+        retry_fit = False
         print("-------------------- STEP 4: Detect astrometric sources --------------------")
         print("Astrometric Catalog: ",catalogList[catalogIndex])
         reference_catalog = generate_astrometric_catalog(processList, catalog=catalogList[catalogIndex])
         # The table must have at least MIN_CATALOG_THRESHOLD entries to be useful
         if len(reference_catalog) >= MIN_CATALOG_THRESHOLD:
             print("\nSUCCESS")
+        else:
+            if catalogIndex < numCatalogs - 1:
+                print("Not enough sources found in catalog " + catalogList[catalogIndex])
+                print("Try again with the next catalog")
+                catalogIndex += 1
+                retry_fit = True
+                skip_all_other_steps = True
+            else:
+                print("Not enough sources found in any catalog - no processing done.")
+                return (1)
+        if not skip_all_other_steps:
         # 5: Extract catalog of observable sources from each input image
             print("-------------------- STEP 5: Source finding --------------------")
-            if catalogIndex == 0:
+            if not extracted_sources:
                 extracted_sources = generate_source_catalogs(processList)
                 for imgname in extracted_sources.keys():
                     table=extracted_sources[imgname]["catalog_table"]
@@ -216,6 +235,17 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
             imgctr=0
             for item in imglist:
                 retry_fit = False
+                #Handle fitting failures (no matches found)
+                if item.meta['tweakwcs_info']['status'].startswith("FAILED") == True:
+                    if catalogIndex < numCatalogs - 1:
+                        print("No cross matches found between astrometric catalog and sources found in images")
+                        print("Try again with the next catalog")
+                        catalogIndex += 1
+                        retry_fit = True
+                        break
+                    else:
+                        print("No cross matches found in any catalog - no processing done.")
+                        return (1)
                 max_rms_val = max(item.meta['tweakwcs_info']['rms'])
                 num_xmatches = item.meta['tweakwcs_info']['nmatches']
                 # print fit params to screen
@@ -254,25 +284,17 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
                         return(1)
                 else:
                     print("Fit calculations successful.")
-            if not retry_fit:
-                print("\nSUCCESS")
+        if not retry_fit:
+            print("\nSUCCESS")
 
-                # 7: Write new fit solution to input image headers
-                print("-------------------- STEP 7: Update image headers with new WCS information --------------------")
-                if update_hdr_wcs:
-                    update_image_wcs_info(imglist, processList)
-                    print("\nSUCCESS")
-                else:
-                    print("\n STEP SKIPPED")
-                return (0)
-        else:
-            if catalogIndex < numCatalogs-1:
-                print("Not enough sources found in catalog" + catalogList[catalogIndex])
-                print("Try again with the next catalog")
-                catalogIndex += 1
+            # 7: Write new fit solution to input image headers
+            print("-------------------- STEP 7: Update image headers with new WCS information --------------------")
+            if update_hdr_wcs:
+                update_image_wcs_info(imglist, processList)
+                print("\nSUCCESS")
             else:
-                print("Not enough sources found in any catalog - no processing done.")
-                return(1)
+                print("\n STEP SKIPPED")
+            return (0)
 
 
 
