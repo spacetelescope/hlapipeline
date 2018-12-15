@@ -39,6 +39,7 @@ from astropy.stats import gaussian_fwhm_to_sigma
 import photutils
 from photutils import detect_sources, source_properties
 from photutils import Background2D, MedianBackground
+from photutils import IRAFStarFinder
 from scipy import ndimage
 
 import matplotlib.pyplot as plt
@@ -380,7 +381,13 @@ def extract_sources(img, **pars):
     kernel.normalize()
     segm = detect_sources(img, threshold, npixels=source_box,
                           filter_kernel=kernel)
-    cat = source_properties(img, segm)
+    # convert segm to mask for daofind
+    segm_mask = np.zeros(segm.shape,dtype=np.bool)
+    segm_mask[np.where(segm.data > 0)] = 1
+    daofind = IRAFStarFinder(fwhm=fwhm, threshold=5.*bkg.background_rms_median)
+    detection_img = (img-threshold)*segm_mask
+    cat = daofind(detection_img)
+    #cat = source_properties(img, segm)
     print("Total Number of detected sources: {}".format(len(cat)))
     if classify:
         # Remove likely cosmic-rays based on central_moments classification
@@ -391,14 +398,18 @@ def extract_sources(img, **pars):
     else:
         newcat = cat
 
-    tbl = newcat.to_table()
+    cnames = newcat.colnames
+    cnames.append(cnames[0])
+    del cnames[0]
+    tbl = newcat[cnames]
+    #tbl = newcat.to_table()
     print("Final Number of selected sources: {}".format(len(newcat)))
     if output:
         tbl['xcentroid'].info.format = '.10f'  # optional format
         tbl['ycentroid'].info.format = '.10f'
-        tbl['source_sum'].info.format = '.10f'
-        tbl['cxy'].info.format = '.10f'
-        tbl['cyy'].info.format = '.10f'
+        #tbl['source_sum'].info.format = '.10f'
+        #tbl['cxy'].info.format = '.10f'
+        #tbl['cyy'].info.format = '.10f'
         if not output.endswith('.cat'):
             output += '.cat'
         tbl.write(output, format='ascii.commented_header')
@@ -640,7 +651,8 @@ def compute_photometry(catalog, photmode):
     vegazpt = 2.5*np.log10(vegauvis.countrate())
 
     # Use zero-point to convert flux values from catalog into magnitudes
-    source_phot = vegazpt - 2.5*np.log10(catalog['source_sum'])
+    #source_phot = vegazpt - 2.5*np.log10(catalog['source_sum'])
+    source_phot = vegazpt - 2.5*np.log10(catalog['flux'])
     source_phot.name = 'vegamag'
     # Now add this new column to the catalog table
     catalog.add_column(source_phot)
