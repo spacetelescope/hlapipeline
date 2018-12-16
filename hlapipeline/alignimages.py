@@ -319,11 +319,12 @@ def generate_astrometric_catalog(imglist, **pars):
     # generate catalog
     out_catalog = amutils.create_astrometric_catalog(imglist,**pars)
 
-    # write catalog to ascii text file
-    catalog_fileanme = "refcatalog.cat"
-    out_catalog.write(catalog_fileanme, format="ascii.fast_commented_header")
+    # if the catalog has contents, write the catalog to ascii text file
+    if len(out_catalog) > 0:
+        catalog_filename = "refcatalog.cat"
+        out_catalog.write(catalog_filename, format="ascii.fast_commented_header")
+        print("Wrote reference catalog {}.".format(catalog_filename))
 
-    print("Wrote reference catalog {}.".format(catalog_fileanme))
     return(out_catalog)
 
 
