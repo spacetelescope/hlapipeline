@@ -37,9 +37,9 @@ from astropy.nddata import NDData
 from astropy.convolution import Gaussian2DKernel
 from astropy.stats import gaussian_fwhm_to_sigma
 import photutils
-from photutils import detect_sources, source_properties
+from photutils import detect_sources, source_properties, deblend_sources
 from photutils import Background2D, MedianBackground
-from photutils import IRAFStarFinder
+from photutils import DAOStarFinder
 from scipy import ndimage
 
 import matplotlib.pyplot as plt
@@ -65,7 +65,7 @@ VEGASPEC = os.path.join(os.path.dirname(MODULE_PATH),
                         'data','alpha_lyr_stis_008.fits')
 
 __all__ = ['create_astrometric_catalog', 'compute_radius', 'find_gsc_offset',
-            'extract_sources', 'find_hist2d_offset', 'build_source_catalog',
+            'extract_sources', 'find_hist2d_offset', 'generate_source_catalog',
             'classify_sources', 'countExtn']
 
 """
@@ -347,6 +347,15 @@ def extract_sources(img, **pars):
         cosmic-ray, and not include those sources in the final catalog.
         Default: True
 
+    centering_mode : {'segmentation', 'starfind'}
+        Algorithm to use when computing the positions of the detected sources.
+        Centering will only take place after `threshold` has been determined, and
+        sources are identified using segmentation.  Centering using `segmentation`
+        will rely on `photutils.segmentation.source_properties` to generate the
+        properties for the source catalog.  Centering using `starfind` will use
+        `photutils.IRAFStarFinder` to characterize each source in the catalog.
+        Default: 'starfind'
+
     output : str
         If specified, write out the catalog of sources to the file with this name
 
@@ -365,51 +374,63 @@ def extract_sources(img, **pars):
     output = pars.get('output', None)
     plot = pars.get('plot', False)
     vmax = pars.get('vmax', None)
+    centering_mode = pars.get('centering_mode', 'starfind')
+    
+    bkg_estimator = MedianBackground()
+    bkg = Background2D(img, (50, 50), filter_size=(3, 3),
+                       bkg_estimator=bkg_estimator)
+    bkg_rms = (5. * bkg.background_rms)
+    bkg_rms_mean = bkg_rms.mean()
 
     if threshold is None or threshold < 0.0:
-        bkg_estimator = MedianBackground()
-        bkg = Background2D(img, (50, 50), filter_size=(3, 3),
-                           bkg_estimator=bkg_estimator)
-        default_threshold = bkg.background + (5. * bkg.background_rms)
+        default_threshold = bkg.background + bkg_rms 
         if threshold is not None and threshold < 0.0:
             threshold = -1*threshold*default_threshold
             print("{} based on {}".format(threshold.max(), default_threshold.max()))
         else:
             threshold = default_threshold
+    else:
+        bkg_rms_mean = 3. * threshold
     sigma = fwhm * gaussian_fwhm_to_sigma
     kernel = Gaussian2DKernel(sigma, x_size=source_box, y_size=source_box)
     kernel.normalize()
     segm = detect_sources(img, threshold, npixels=source_box,
                           filter_kernel=kernel)
-    # convert segm to mask for daofind
-    segm_mask = np.zeros(segm.shape,dtype=np.bool)
-    segm_mask[np.where(segm.data > 0)] = 1
-    daofind = IRAFStarFinder(fwhm=fwhm, threshold=5.*bkg.background_rms_median)
-    detection_img = (img-threshold)*segm_mask
-    cat = daofind(detection_img)
-    #cat = source_properties(img, segm)
-    print("Total Number of detected sources: {}".format(len(cat)))
+    # If classify is turned on, it should modify the segmentation map
     if classify:
+        cat = source_properties(img, segm)
         # Remove likely cosmic-rays based on central_moments classification
-        goodsrcs = np.where(classify_sources(cat) == 1)[0].tolist()
-        newcat = photutils.segmentation.properties.SourceCatalog([])
-        for src in goodsrcs:
-            newcat._data.append(cat[src])
-    else:
-        newcat = cat
+        bad_srcs = np.where(classify_sources(cat) == 0)[0]+1
+        segm.remove_labels(bad_srcs) # CAUTION: May be time-consuming!!!
 
-    cnames = newcat.colnames
+    # convert segm to mask for daofind
+    if centering_mode == 'starfind':
+        segm_mask = np.zeros(segm.shape,dtype=np.bool)
+        segm_mask[np.where(segm.data > 0)] = 1
+        detection_img = (img-threshold)*segm_mask
+        #daofind = IRAFStarFinder(fwhm=fwhm, threshold=5.*bkg.background_rms_median)
+        daofind = DAOStarFinder(fwhm=fwhm, threshold=bkg_rms_mean)
+        src_table = daofind(detection_img)
+    else:
+        newcat = source_properties(img, segm)
+        src_table = newcat.to_table()
+        # Make column names consistent with IRAFStarFinder column names
+        src_table.rename_column('source_sum', 'flux')
+        src_table.rename_column('source_sum_err', 'flux_err')
+
+    print("Total Number of detected sources: {}".format(len(src_table)))
+
+    # Move 'id' column from first to last position
+    # Makes it consistent for remainder of code
+    cnames = src_table.colnames
     cnames.append(cnames[0])
     del cnames[0]
-    tbl = newcat[cnames]
-    #tbl = newcat.to_table()
-    print("Final Number of selected sources: {}".format(len(newcat)))
+    tbl = src_table[cnames]
+
     if output:
         tbl['xcentroid'].info.format = '.10f'  # optional format
         tbl['ycentroid'].info.format = '.10f'
-        #tbl['source_sum'].info.format = '.10f'
-        #tbl['cxy'].info.format = '.10f'
-        #tbl['cyy'].info.format = '.10f'
+        tbl['flux'].info.format = '.10f'
         if not output.endswith('.cat'):
             output += '.cat'
         tbl.write(output, format='ascii.commented_header')
@@ -419,10 +440,13 @@ def extract_sources(img, **pars):
         norm = None
         if vmax is None:
             norm = ImageNormalize(stretch=SqrtStretch())
-        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8, 8))
-        ax1.imshow(img, origin='lower', cmap='Greys_r', norm=norm, vmax=vmax)
-        ax2.imshow(segm, origin='lower', cmap=segm.cmap(random_state=12345))
-
+        fig, ax = plt.subplots(2, 2, figsize=(8, 8))
+        ax[0][0].imshow(img, origin='lower', cmap='Greys_r', norm=norm, vmax=vmax)
+        ax[0][1].imshow(segm, origin='lower', cmap=segm.cmap(random_state=12345))
+        ax[0][1].set_title('Segmentation Map')
+        ax[1][0].imshow(bkg.background, origin='lower')
+        if not isinstance(threshold, float):
+            ax[1][1].imshow(threshold, origin='lower')
     return tbl, segm
 
 def classify_sources(catalog, sources=None):
@@ -1065,7 +1089,8 @@ def build_nddata(image, group_id, source_catalog):
         # SCI extensions *of the same FITS file* so that they can be
         # aligned together.
         img = NDData(data=im_data, mask=dq_data != 0, wcs=w,
-                     meta={'chip': chip, 'group_id':group_id})
+                     meta={'chip': chip, 'group_id':group_id, 
+                           'filename':image})
         # append source catalog, if provided
         if source_catalog:
             imcat = source_catalog[chip]
@@ -1081,4 +1106,3 @@ def build_nddata(image, group_id, source_catalog):
         hdulist.close()
 
     return images
-

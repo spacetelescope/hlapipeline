@@ -45,7 +45,7 @@ detector_specific_params = {"acs":
                                  "sbc":
                                      {"fwhmpsf": 0.065,
                                       "classify": False,
-                                      "threshold": 10},
+                                      "threshold": 2.0},
                                  "wfc":
                                      {"fwhmpsf": 0.076,
                                       "classify": True,
@@ -245,7 +245,7 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
             print("-------------------- STEP 6: Cross matching and fitting --------------------")
             # Specify matching algorithm to use
             match = tweakwcs.TPMatch(searchrad=250, separation=0.1,
-                                     tolerance=100, use2dhist=False)
+                                     tolerance=5, use2dhist=True)
             # Align images and correct WCS
             tweakwcs.tweak_image_wcs(imglist, reference_catalog, match=match)
             # Interpret RMS values from tweakwcs
@@ -383,9 +383,9 @@ def generate_source_catalogs(imglist, **pars):
         if instrument in detector_specific_params.keys():
             if detector in detector_specific_params[instrument].keys():
                 detector_pars = detector_specific_params[instrument][detector]
-                sourcecatalogdict[imgname]["params"] = detector_pars
                 # to allow generate_source_catalog to get detector specific parameters
-                pars.update(detector_pars)
+                detector_pars.update(pars)
+                sourcecatalogdict[imgname]["params"] = detector_pars
             else:
                 sys.exit("ERROR! Unrecognized detector '{}'. Exiting...".format(detector))
         else:
@@ -394,7 +394,8 @@ def generate_source_catalogs(imglist, **pars):
         # Identify sources in image, convert coords from chip x, y form to reference WCS sky RA, Dec form.
         imgwcs = HSTWCS(imghdu, 1)
         fwhmpsf_pix = sourcecatalogdict[imgname]["params"]['fwhmpsf']/imgwcs.pscale #Convert fwhmpsf from arsec to pixels
-        sourcecatalogdict[imgname]["catalog_table"] = amutils.generate_source_catalog(imghdu, fwhm=fwhmpsf_pix, **pars)
+
+        sourcecatalogdict[imgname]["catalog_table"] = amutils.generate_source_catalog(imghdu, fwhm=fwhmpsf_pix, **detector_pars)
 
         # write out coord lists to files for diagnostic purposes. Protip: To display the sources in these files in DS9,
         # set the "Coordinate System" option to "Physical" when loading the region file.
