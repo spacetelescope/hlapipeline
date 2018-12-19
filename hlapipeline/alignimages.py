@@ -47,7 +47,7 @@ detector_specific_params = {"acs":
                                       "classify": False,
                                       "threshold": 2.0},
                                  "wfc":
-                                     {"fwhmpsf": 0.076,
+                                     {"fwhmpsf": 0.13, #0.076,
                                       "classify": True,
                                       "threshold": -1.1}},
                             "wfc3":
@@ -223,7 +223,7 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
         # 5: Extract catalog of observable sources from each input image
             print("-------------------- STEP 5: Source finding --------------------")
             if not extracted_sources:
-                extracted_sources = generate_source_catalogs(processList)
+                extracted_sources = generate_source_catalogs(processList, centering_mode='segmentation')
                 for imgname in extracted_sources.keys():
                     table=extracted_sources[imgname]["catalog_table"]
                     # The catalog of observable sources must have at least MIN_OBSERVABLE_THRESHOLD entries to be useful

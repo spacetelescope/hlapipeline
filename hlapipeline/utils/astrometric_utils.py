@@ -380,7 +380,7 @@ def extract_sources(img, **pars):
     bkg = Background2D(img, (50, 50), filter_size=(3, 3),
                        bkg_estimator=bkg_estimator)
     bkg_rms = (5. * bkg.background_rms)
-    bkg_rms_mean = bkg_rms.mean()
+    bkg_rms_mean = 3. * bkg_rms.std()
 
     if threshold is None or threshold < 0.0:
         default_threshold = bkg.background + bkg_rms 
@@ -394,8 +394,11 @@ def extract_sources(img, **pars):
     sigma = fwhm * gaussian_fwhm_to_sigma
     kernel = Gaussian2DKernel(sigma, x_size=source_box, y_size=source_box)
     kernel.normalize()
-    segm = detect_sources(img, threshold, npixels=source_box,
+    segm = detect_sources(img, threshold, npixels=source_box*source_box,
                           filter_kernel=kernel)
+    segm = deblend_sources(img, segm, npixels=5,
+                           filter_kernel=kernel, nlevels=16,
+                           contrast=0.01)
     # If classify is turned on, it should modify the segmentation map
     if classify:
         cat = source_properties(img, segm)
@@ -405,12 +408,29 @@ def extract_sources(img, **pars):
 
     # convert segm to mask for daofind
     if centering_mode == 'starfind':
-        segm_mask = np.zeros(segm.shape,dtype=np.bool)
-        segm_mask[np.where(segm.data > 0)] = 1
-        detection_img = (img-threshold)*segm_mask
+        src_table = None
+        #segm_mask = np.zeros(segm.shape,dtype=np.bool)
+        #segm_mask[np.where(segm.data > 0)] = 1
+        #detection_img = (img-threshold)*segm_mask
         #daofind = IRAFStarFinder(fwhm=fwhm, threshold=5.*bkg.background_rms_median)
         daofind = DAOStarFinder(fwhm=fwhm, threshold=bkg_rms_mean)
-        src_table = daofind(detection_img)
+        for label in segm.labels:
+            # Create mask which is blank everywhere except in the segment
+            blank_segm = np.zeros(segm.shape, dtype=np.bool)
+            blank_segm[np.where(segm.data==label)] = 1
+            # apply mask to image 
+            detection_img = img*blank_segm
+            # Detect sources in this specific segment
+            seg_table = daofind(detection_img)
+            # Pick out brightest source only
+            if src_table is None:
+                # Initialize final master source list catalog
+                src_table = Table(names=seg_table.colnames,
+                                  dtype=[dt[1] for dt in seg_table.dtype.descr])
+            if len(seg_table) > 0:
+                max_row = np.where(seg_table['peak'] == seg_table['peak'].max())[0][0]
+                # Add row for detected source to master catalog
+                src_table.add_row(seg_table[max_row])
     else:
         newcat = source_properties(img, segm)
         src_table = newcat.to_table()
