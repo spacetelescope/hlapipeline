@@ -223,7 +223,7 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
         # 5: Extract catalog of observable sources from each input image
             print("-------------------- STEP 5: Source finding --------------------")
             if not extracted_sources:
-                extracted_sources = generate_source_catalogs(processList, centering_mode='segmentation')
+                extracted_sources = generate_source_catalogs(processList, centering_mode='starfind')
                 for imgname in extracted_sources.keys():
                     table=extracted_sources[imgname]["catalog_table"]
                     # The catalog of observable sources must have at least MIN_OBSERVABLE_THRESHOLD entries to be useful
@@ -245,7 +245,7 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
             print("-------------------- STEP 6: Cross matching and fitting --------------------")
             # Specify matching algorithm to use
             match = tweakwcs.TPMatch(searchrad=250, separation=0.1,
-                                     tolerance=5, use2dhist=True)
+                                     tolerance=20, use2dhist=True)
             # Align images and correct WCS
             tweakwcs.tweak_image_wcs(imglist, reference_catalog, match=match)
             # Interpret RMS values from tweakwcs
@@ -415,7 +415,7 @@ def generate_source_catalogs(imglist, **pars):
 # ----------------------------------------------------------------------------------------------------------------------
 
 
-def update_image_wcs_info(tweakwcs_output, imagelist):
+def update_image_wcs_info(tweakwcs_output,imagelist):
     """Write newly computed WCS information to image headers
 
     Parameters

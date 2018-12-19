@@ -375,15 +375,16 @@ def extract_sources(img, **pars):
     plot = pars.get('plot', False)
     vmax = pars.get('vmax', None)
     centering_mode = pars.get('centering_mode', 'starfind')
-    
+    deblend = pars.get('deblend', False)
+
     bkg_estimator = MedianBackground()
     bkg = Background2D(img, (50, 50), filter_size=(3, 3),
                        bkg_estimator=bkg_estimator)
     bkg_rms = (5. * bkg.background_rms)
-    bkg_rms_mean = 3. * bkg_rms.std()
+    bkg_rms_mean = bkg.background.mean() + 5. * bkg_rms.std()
 
     if threshold is None or threshold < 0.0:
-        default_threshold = bkg.background + bkg_rms 
+        default_threshold = bkg.background + bkg_rms
         if threshold is not None and threshold < 0.0:
             threshold = -1*threshold*default_threshold
             print("{} based on {}".format(threshold.max(), default_threshold.max()))
@@ -394,9 +395,10 @@ def extract_sources(img, **pars):
     sigma = fwhm * gaussian_fwhm_to_sigma
     kernel = Gaussian2DKernel(sigma, x_size=source_box, y_size=source_box)
     kernel.normalize()
-    segm = detect_sources(img, threshold, npixels=source_box*source_box,
+    segm = detect_sources(img, threshold, npixels=source_box,
                           filter_kernel=kernel)
-    segm = deblend_sources(img, segm, npixels=5,
+    if deblend:
+        segm = deblend_sources(img, segm, npixels=5,
                            filter_kernel=kernel, nlevels=16,
                            contrast=0.01)
     # If classify is turned on, it should modify the segmentation map
@@ -418,7 +420,7 @@ def extract_sources(img, **pars):
             # Create mask which is blank everywhere except in the segment
             blank_segm = np.zeros(segm.shape, dtype=np.bool)
             blank_segm[np.where(segm.data==label)] = 1
-            # apply mask to image 
+            # apply mask to image
             detection_img = img*blank_segm
             # Detect sources in this specific segment
             seg_table = daofind(detection_img)
@@ -1109,7 +1111,7 @@ def build_nddata(image, group_id, source_catalog):
         # SCI extensions *of the same FITS file* so that they can be
         # aligned together.
         img = NDData(data=im_data, mask=dq_data != 0, wcs=w,
-                     meta={'chip': chip, 'group_id':group_id, 
+                     meta={'chip': chip, 'group_id':group_id,
                            'filename':image})
         # append source catalog, if provided
         if source_catalog:
