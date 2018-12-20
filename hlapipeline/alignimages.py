@@ -6,6 +6,8 @@
 
 from astropy.io import fits
 from astropy.table import Table
+from astropy.coordinates import SkyCoord, Angle
+from astropy import units as u
 from collections import OrderedDict
 from drizzlepac import updatehdr
 import glob
@@ -30,7 +32,7 @@ MIN_CATALOG_THRESHOLD = 3
 MIN_OBSERVABLE_THRESHOLD = 10
 MIN_CROSS_MATCHES = 3
 MIN_FIT_MATCHES = 6
-MAX_FIT_RMS = 1.0
+MAX_FIT_RMS = 10 # RMS now in mas, 1.0
 
 # Module-level dictionary contains instrument/detector-specific parameters used later on in the script.
 detector_specific_params = {"acs":
@@ -230,6 +232,8 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
                                      tolerance=100, use2dhist=False)
             # Align images and correct WCS
             tweakwcs.tweak_image_wcs(imglist, reference_catalog, match=match)
+            # Interpret RMS values from tweakwcs
+            interpret_fit_rms(imglist, reference_catalog)
 
             tweakwcs_info_keys = OrderedDict(imglist[0].meta['tweakwcs_info']).keys()
             imgctr=0
@@ -246,7 +250,7 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
                     else:
                         print("No cross matches found in any catalog - no processing done.")
                         return (1)
-                max_rms_val = max(item.meta['tweakwcs_info']['rms'])
+                max_rms_val = item.meta['tweakwcs_info']['FIT_RMS'].value
                 num_xmatches = item.meta['tweakwcs_info']['nmatches']
                 # print fit params to screen
                 print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ FIT PARAMETERS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
@@ -274,7 +278,7 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
                         return(1)
                 elif max_rms_val > MAX_FIT_RMS:
                     if catalogIndex < numCatalogs-1:
-                        print("Fit RMS value(s) X_rms= {}, Y_rms = {} greater than the maximum threshold value {}.".format(item.meta['tweakwcs_info']['rms'][0], item.meta['tweakwcs_info']['rms'][1],MAX_FIT_RMS))
+                        print("Fit RMS value = {}mas greater than the maximum threshold value {}.".format(item.meta['tweakwcs_info']['FIT_RMS'].value,MAX_FIT_RMS))
                         print("Try again with the next catalog")
                         catalogIndex += 1
                         retry_fit = True
@@ -394,7 +398,7 @@ def generate_source_catalogs(imglist, **pars):
 # ----------------------------------------------------------------------------------------------------------------------
 
 
-def update_image_wcs_info(tweakwcs_output,imagelist):
+def update_image_wcs_info(tweakwcs_output, imagelist):
     """Write newly computed WCS information to image headers
 
     Parameters
@@ -428,6 +432,65 @@ def update_image_wcs_info(tweakwcs_output,imagelist):
     print("CLOSE {}".format(hdulist[0].header['FILENAME'])) #TODO: Remove before deployment
     hdulist.flush() #close last image
     hdulist.close()
+
+
+# ======================================================================================================================
+
+def interpret_fit_rms(tweakwcs_output, reference_catalog):
+    """Interpret the FIT information to convert RMS to physical units
+
+    Parameters
+    ----------
+    tweakwcs_output : list
+        output of tweakwcs. Contains sourcelist tables, newly computed WCS info, etc. for every chip of every valid
+        input image.  This list gets updated, in-place, with the new RMS values;
+        specifically,
+
+            * 'FIT_RMS': RMS of the separations between fitted image positions and reference positions
+            * 'TOTAL_RMS': mean of the FIT_RMS values for all observations
+            * 'NUM_FITS': number of images/group_id's with successful fits included in the TOTAL_RMS
+
+        These entries are added to the 'tweakwcs_info' dictionary.
+
+    reference_catalog : astropy.Table
+        Table of reference source positions used for the fit
+
+    Returns
+    -------
+    Nothing
+    """
+    # Start by collecting information by group_id
+    group_ids = [info.meta['group_id'] for info in tweakwcs_output]
+    group_dict = {'avg_RMS':None}
+    obs_rms = []
+    for group_id in group_ids:
+        group_dict[group_id] = {'ref_idx':None, 'FIT_RMS':None}
+        for item in tweakwcs_output:
+            if item.meta['tweakwcs_info']['status'].startswith('FAILED'):
+                continue
+            if item.meta['group_id'] == group_id and \
+               group_dict[group_id]['ref_idx'] is None:
+                    tinfo = item.meta['tweakwcs_info']
+                    ref_idx = tinfo['fit_ref_idx']
+                    group_dict[group_id]['ref_idx'] = ref_idx
+                    ref_RA = reference_catalog[ref_idx]['RA']
+                    ref_DEC = reference_catalog[ref_idx]['DEC']
+                    img_coords = SkyCoord(tinfo['fit_RA'], tinfo['fit_DEC'],
+                                          unit='deg',frame='icrs')
+                    ref_coords = SkyCoord(ref_RA, ref_DEC, unit='deg',frame='icrs')
+                    fit_rms = np.std(Angle(img_coords.separation(ref_coords), unit=u.mas))
+                    group_dict[group_id]['FIT_RMS'] = fit_rms # as an Angle object
+                    obs_rms.append(fit_rms.value)
+    # Compute RMS for entire ASN/observation set
+    total_rms = np.mean(obs_rms)
+
+    # Now, append computed results to tweakwcs_output
+    for item in tweakwcs_output:
+        group_id = item.meta['group_id']
+        item.meta['tweakwcs_info']['FIT_RMS'] = group_dict[group_id]['FIT_RMS']
+        item.meta['tweakwcs_info']['TOTAL_RMS'] = total_rms
+        item.meta['tweakwcs_info']['NUM_FITS'] = len(obs_rms)
+
 
 
 # ======================================================================================================================
@@ -469,4 +532,3 @@ if __name__ == '__main__':
     update_hdr_wcs = convert_string_tf_to_boolean(ARGS.update_hdr_wcs)
     # Get to it!
     return_value = perform_align(input_list,archive,clobber,update_hdr_wcs)
-
