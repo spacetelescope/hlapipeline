@@ -78,28 +78,24 @@ def check_and_get_data(input_list,**pars):
     """
     totalInputList=[]
     for input_item in input_list:
-        if input_item.endswith("0"): #asn table
-            totalInputList += aqutils.retrieve_observation(input_item,**pars)
-
-        else: #single file rootname.
-            fitsfilename = glob.glob("{}_flc.fits".format(input_item))
-            if not fitsfilename:
-                fitsfilename = glob.glob("{}_flt.fits".format(input_item))
-            fitsfilename = fitsfilename[0]
-
-            if not os.path.exists(fitsfilename):
-                imghdu = fits.open(fitsfilename)
+        filelist = aqutils.retrieve_observation(input_item,**pars)
+        if len(filelist) == 0:
+            # look for local copy of the file
+            fitsfilenames = sorted(glob.glob("{}_fl?.fits".format(input_item)))
+            if len(fitsfilenames) > 0:
+                imghdu = fits.open(fitsfilenames[0])
                 imgprimaryheader = imghdu[0].header
                 try:
                     asnid = imgprimaryheader['ASN_ID'].strip().lower()
-                except:
-                    asnid = 'NONE'
-                if asnid[0] in ['i','j']:
-                    totalInputList += aqutils.retrieve_observation(asnid,**pars)
-                else:
-                    totalInputList += aqutils.retrieve_observation(input_item, **pars) #try with ippssoot instead
+                    if asnid == 'NONE':
+                        asnid = None
+                except KeyError:
+                    asnid = None
+                if asnid:
+                    filelist = aqutils.retrieve_observation(asnid,**pars)
+        if len(filelist) > 0:
+            totalInputList += filelist
 
-            else: totalInputList.append(fitsfilename)
     print("TOTAL INPUT LIST: ",totalInputList)
     # TODO: add trap to deal with non-existent (incorrect) rootnames
     # TODO: Address issue about how the code will retrieve association information if there isn't a local file to get 'ASN_ID' header info
