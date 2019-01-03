@@ -29,31 +29,36 @@ None.
 import os, sys
 #-----------------------------------------------------------------------------------------------------------------------
 def print_rev_id(localRepoPath):
-	"""
-	prints information about the specified local repository to STDOUT. Expected method of execution: command-line or
+	"""prints information about the specified local repository to STDOUT. Expected method of execution: command-line or
 	shell script call
 
-	:param localRepoPath: local repository path.
-	:type localRepoPath: string
-	:return: Nothing as such. subroutine will exit with a state of 0 if everything ran OK, and a value of '111' if
+	Parameters
+    ----------
+	localRepoPath: string
+		Local repository path.
+
+	Returns
+    =======
+    Nothing as such. subroutine will exit with a state of 0 if everything ran OK, and a value of '111' if
 	something went wrong.
 	"""
 	start_path = os.getcwd()
 	try:
+		print("Local repository path: {}".format(localRepoPath))
 		os.chdir(localRepoPath)
-		print "== Remote URL"
+		print("\n== Remote URL")
 		os.system('git remote -v')
+                
+		# print("\n== Remote Branches")
+		# os.system("git branch -r")
 
-		print "== Remote Branches"
-		os.system("git branch -r")
-
-		print "== Local Branches"
+		print("\n== Local Branches")
 		os.system("git branch")
 
-		print "== Configuration (.git/config)"
-		os.system("cat .git/config")
+		# print("\n== Configuration (.git/config)")
+		# os.system("cat .git/config")
 
-		print "== Most Recent Commit"
+		print("\n== Most Recent Commit")
 		os.system("git log |head -1")
 	except:
 		sys.exit(111)
@@ -61,13 +66,17 @@ def print_rev_id(localRepoPath):
 		os.chdir(start_path)
 #-----------------------------------------------------------------------------------------------------------------------
 def get_rev_id(localRepoPath):
-	"""
-    returns the current full git revision id of the specified local repository. Expected method of execution: python
+	"""returns the current full git revision id of the specified local repository. Expected method of execution: python
     subroutine call
 
-    :param localRepoPath: local repository path.
-    :type localRepoPath: string
-    :return: full git revision ID of the specified repository if everything ran OK, and "FAILURE" if something went
+	Parameters
+    ----------
+	localRepoPath: string
+		Local repository path.
+
+	Returns
+    =======
+    full git revision ID of the specified repository if everything ran OK, and "FAILURE" if something went
     wrong.
     """
 	start_path = os.getcwd()
