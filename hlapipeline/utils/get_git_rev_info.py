@@ -4,7 +4,7 @@ Displays revision information on the specified git-controlled repository
 
 Path
 ----
-software/git_helper_scripts/get_git_rev_info.py
+hlapipeline/hlapipeline/utils/get_git_rev_info.py
 
 Dependencies
 ------------
@@ -18,13 +18,9 @@ Inputs
 
 Example
 -------
-Get git revision info on git repository operations::
+Get git revision info on git repository "foo"::
 
-    $HLAsoftware/git_helper_scripts/get_git_rev_info.py operations
-
-Functions
----------
-None.
+    hlapipeline/hlapipeline/utils/get_git_rev_info.py foo
 """
 import os, sys
 #-----------------------------------------------------------------------------------------------------------------------
@@ -55,15 +51,16 @@ def print_rev_id(localRepoPath):
 		print("\n== Local Branches")
 		os.system("git branch")
 
-		# print("\n== Configuration (.git/config)")
-		# os.system("cat .git/config")
-
 		print("\n== Most Recent Commit")
 		os.system("git log |head -1")
+		rv = 0
 	except:
-		sys.exit(111)
+		rv = 111
+		print("WARNING! get_git_rev_info.print_rev_id() encountered a problem and cannot continue.")
 	finally:
 		os.chdir(start_path)
+		if rv != 0:
+			sys.exit(rv)
 #-----------------------------------------------------------------------------------------------------------------------
 def get_rev_id(localRepoPath):
 	"""returns the current full git revision id of the specified local repository. Expected method of execution: python

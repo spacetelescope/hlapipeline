@@ -98,6 +98,8 @@ def check_and_get_data(input_list,**pars):
         if len(filelist) > 0:
             totalInputList += filelist
 
+    if len(filelist) > 0: totalInputList = sorted(
+        list(set(totalInputList)))  # remove duplicate list elements, sort resulting list of unique elements
     print("TOTAL INPUT LIST: ",totalInputList)
     # TODO: add trap to deal with non-existent (incorrect) rootnames
     # TODO: Address issue about how the code will retrieve association information if there isn't a local file to get 'ASN_ID' header info
@@ -153,8 +155,20 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
 
     # 0: print git info
     print("-------------------- STEP 0: Display Git revision info  --------------------")
-    get_git_rev_info.print_rev_id(os.path.dirname(__file__))
-    
+    full_path = os.path.dirname(__file__)+"/utils"
+    repo_path=None
+    if "hlapipeline/hlapipeline" in full_path:
+        repo_path = full_path.split("hlapipeline/hlapipeline")[0]+"hlapipeline"
+    elif "hlapipeline" in full_path:
+        repo_path = full_path.split("hlapipeline")[0]+"hlapipeline"
+    else:
+        pass
+    if not os.path.exists(repo_path): repo_path = None # protect against non-existent paths
+    if repo_path:
+        get_git_rev_info.print_rev_id(repo_path) # Display git repository information
+    else:
+        print("WARNING: Unable to display Git repository revision information.")
+
     # 1: Interpret input data and optional parameters
     print("-------------------- STEP 1: Get data --------------------")
     imglist = check_and_get_data(input_list, archive=archive, clobber=clobber)
