@@ -361,6 +361,10 @@ def extract_sources(img, **pars):
         `photutils.IRAFStarFinder` to characterize each source in the catalog.
         Default: 'starfind'
 
+    nlargest : int, None
+        Number of largest (brightest) sources in each chip/array to measure 
+        when using 'starfind' mode.  Default: None (all)
+        
     output : str
         If specified, write out the catalog of sources to the file with this name
 
@@ -382,6 +386,7 @@ def extract_sources(img, **pars):
     centering_mode = pars.get('centering_mode', 'starfind')
     deblend = pars.get('deblend', False)
     dqmask = pars.get('dqmask',None)
+    nlargest = pars.get('nlargest', None)
     # apply any provided dqmask for segmentation only
     if dqmask is not None:
         imgarr = img.copy()
@@ -422,14 +427,21 @@ def extract_sources(img, **pars):
         segm.remove_labels(bad_srcs) # CAUTION: May be time-consuming!!!
     cat = source_properties(img, segm)
 
+    
     # convert segm to mask for daofind
     if centering_mode == 'starfind':
         src_table = None
         #daofind = IRAFStarFinder(fwhm=fwhm, threshold=5.*bkg.background_rms_median)
         print("Setting up DAOStarFinder with: \n    fwhm={}  threshold={}".format(fwhm, bkg_rms_mean))
         daofind = DAOStarFinder(fwhm=fwhm, threshold=bkg_rms_mean)
+        # Identify nbrightest/largest sources 
+        if nlargest is not None:
+            large_labels = np.flip(np.argsort(segm.areas)+1)[:nlargest]
+
         print("Looking for sources in {} segments".format(len(segm.labels))) 
         for label in segm.labels:
+            if nlargest is not None and label not in large_labels:
+                continue # Move on to the next segment
             # Create mask which is blank everywhere except in the segment
             blank_segm = np.zeros(segm.shape, dtype=np.bool)
             blank_segm[np.where(segm.data==label)] = 1
