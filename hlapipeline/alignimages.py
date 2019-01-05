@@ -507,7 +507,11 @@ def interpret_fit_rms(tweakwcs_output, reference_catalog):
     # Now, append computed results to tweakwcs_output
     for item in tweakwcs_output:
         group_id = item.meta['group_id']
-        item.meta['tweakwcs_info']['FIT_RMS'] = group_dict[group_id]['FIT_RMS']
+        if group_id in group_dict:
+            fit_rms = group_dict[group_id]['FIT_RMS']
+        else:
+            fit_rms = None
+        item.meta['tweakwcs_info']['FIT_RMS'] = fit_rms
         item.meta['tweakwcs_info']['TOTAL_RMS'] = total_rms
         item.meta['tweakwcs_info']['NUM_FITS'] = len(group_ids)
 
