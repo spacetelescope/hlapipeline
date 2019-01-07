@@ -188,7 +188,7 @@ def create_astrometric_catalog(inputs, **pars):
             g = -1  # indicator for no source ID extracted
         r = float(source['ra'])
         d = float(source['dec'])
-        m = float(source['mag'])
+        m = -999.9  # float(source['mag'])
         o = source['objID']
         num_sources += 1
         ref_table.add_row((r,d,m,o,g))
