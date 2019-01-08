@@ -410,6 +410,8 @@ def extract_sources(img, **pars):
             threshold = default_threshold
     else:
         bkg_rms_mean = 3. * threshold
+    if bkg_rms_mean < 0:
+        bkg_rms_mean = 0.
     sigma = fwhm * gaussian_fwhm_to_sigma
     kernel = Gaussian2DKernel(sigma, x_size=source_box, y_size=source_box)
     kernel.normalize()
@@ -437,17 +439,19 @@ def extract_sources(img, **pars):
         # Identify nbrightest/largest sources 
         if nlargest is not None:
             large_labels = np.flip(np.argsort(segm.areas)+1)[:nlargest]
-
-        print("Looking for sources in {} segments".format(len(segm.labels))) 
+        print("Looking for sources in {} segments".format(len(segm.labels)))
+        
         for label in segm.labels:
             if nlargest is not None and label not in large_labels:
                 continue # Move on to the next segment
             # Create mask which is blank everywhere except in the segment
             blank_segm = np.zeros(segm.shape, dtype=np.bool)
             blank_segm[np.where(segm.data==label)] = 1
+
             # apply mask to original image
             detection_img = img*blank_segm
-            # Detect sources in this specific segment
+
+            # Detect sources in this specific segment            
             seg_table = daofind(detection_img)
                 
             # Pick out brightest source only
