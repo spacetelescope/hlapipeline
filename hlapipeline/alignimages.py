@@ -238,19 +238,8 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
         skip_all_other_steps = True
     else:
         print("-------------------- STEP 5b: Cross matching and fitting --------------------")
-        # Specify matching algorithm to use
-        match = tweakwcs.TPMatch(searchrad=75, separation=0.1,
-                                 tolerance=2.0, use2dhist=True)
-        # Align images and correct WCS
-        tweakwcs.tweak_image_wcs(imglist, reference_catalog, match=match)
-        # Interpret RMS values from tweakwcs
-        interpret_fit_rms(imglist, reference_catalog)
-
-        # determine the quality of the fit
-        best_fit, best_num_fit  = determine_fit_quality(imglist, print_fit_parameters=print_fit_parameters)
-
-        for item in imglist:
-            item.best_meta = item.meta.copy()
+        best_fit_rms, best_fit_num = match_2dhist_fit(imglist, reference_catalog,
+                                     print_fit_parameters=print_fit_parameters)
 
         # 6b: If available, the logic tree for fitting with different algorithms 
         # would be here.   These would only be invoked if the above step failed.  
@@ -260,9 +249,8 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
         # with other catalogs. 
 
 
-
     # 8: If available, try the fitting with different catalogs
-    if best_fit > MAX_FIT_RMS:
+    if best_fit_rms > MAX_FIT_RMS:
         for catalogIndex in range(1, len(catalogList)):
             print("-------------------- STEP 6: Detect catalog astrometric sources --------------------")
             print("Astrometric Catalog: ",catalogList[catalogIndex])
@@ -276,36 +264,26 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
                 skip_all_other_steps = True
             else:
                 print("-------------------- STEP 6b: Cross matching and fitting --------------------")
-                # Specify matching algorithm to use
-                match = tweakwcs.TPMatch(searchrad=250, separation=0.1,
-                                         tolerance=100, use2dhist=False)
-                # Align images and correct WCS
-                tweakwcs.tweak_image_wcs(imglist, reference_catalog, match=match)
-                # Interpret RMS values from tweakwcs
-                interpret_fit_rms(imglist, reference_catalog)
 
-                # determine the quality of the fit
-                rms_fit, num_fit  = determine_fit_quality(imglist, print_fit_parameters=print_fit_parameters)
-
+                fit_rms, fit_num = match_default_fit(imglist, reference_catalog,
+                                     print_fit_parameters=print_fit_parameters)
                 # update the best fit 
-                if rms_fit < best_fit:
-                   best_fit = rms_fit
-                   best_num_fit = num_fit
+                if fit_rms < best_fit_rms:
+                   best_fit_rms = fit_rms
+                   best_fit_num = fit_num
                    for item in imglist:
                        item.best_meta = item.meta.copy()
 
-
-
     # 7: Write new fit solution to input image headers
     print("-------------------- STEP 7: Update image headers with new WCS information --------------------")
-    if best_fit < MAX_FIT_RMS:
-       print("The fitting process was successful with a best fit total rms of {} mas".format(best_fit))
+    if best_fit_rms < MAX_FIT_RMS:
+       print("The fitting process was successful with a best fit total rms of {} mas".format(best_fit_rms))
     else:
-       print("The fitting process was unsuccessful with a best fit total rms of {} mas".format(best_fit))
+       print("The fitting process was unsuccessful with a best fit total rms of {} mas".format(best_fit_rms))
 
-    if best_fit < MAX_FIT_LIMIT:
+    if best_fit_rms < MAX_FIT_LIMIT:
         # update to the meta information with the lowest rms if it is reasonable
-        for img in imglist:
+        for item in imglist:
             item.meta = item.best_meta
 
 
@@ -318,7 +296,85 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
         print("\n STEP SKIPPED")
     return (0)
 
+def match_default_fit(imglist, reference_catalog, print_fit_parameters=True):
+    """Perform cross-matching and final fit using 2dHistogram matching
+    
+    Parameters
+    ----------
+    imglist : list
+        List of input image NDData objects with metadata and source catalogs
+        
+    reference_catalog : Table
+        Astropy Table of reference sources for this field
+    
+    print_fit_parameters: bool
+        Specify whether or not to print out FIT results for each chip
+        
 
+    Returns
+    --------
+    fit_rms : float     
+        Visit level RMS for the FIT 
+        
+    fit_num : int
+        Number of sources used to generate visit level FIT and `fit_rms`
+        
+    """
+    # Specify matching algorithm to use
+    match = tweakwcs.TPMatch(searchrad=250, separation=0.1,
+                             tolerance=100, use2dhist=False)
+    # Align images and correct WCS
+    tweakwcs.tweak_image_wcs(imglist, reference_catalog, match=match)
+    # Interpret RMS values from tweakwcs
+    interpret_fit_rms(imglist, reference_catalog)
+
+    # determine the quality of the fit
+    fit_rms, fit_num  = determine_fit_quality(imglist, print_fit_parameters=print_fit_parameters)
+
+    return fit_rms, fit_num
+
+
+def match_2dhist_fit(imglist, reference_catalog, print_fit_parameters=True):
+    """Perform cross-matching and final fit using 2dHistogram matching
+    
+    Parameters
+    ----------
+    imglist : list
+        List of input image NDData objects with metadata and source catalogs
+        
+    reference_catalog : Table
+        Astropy Table of reference sources for this field
+    
+    print_fit_parameters: bool
+        Specify whether or not to print out FIT results for each chip
+        
+
+    Returns
+    --------
+    fit_rms : float     
+        Visit level RMS for the FIT 
+        
+    fit_num : int
+        Number of sources used to generate visit level FIT and `fit_rms`
+        
+    """
+    print("-------------------- STEP 5b: Cross matching and fitting --------------------")
+    # Specify matching algorithm to use
+    match = tweakwcs.TPMatch(searchrad=75, separation=0.1,
+                             tolerance=2.0, use2dhist=True)
+    # Align images and correct WCS
+    tweakwcs.tweak_image_wcs(imglist, reference_catalog, match=match)
+    # Interpret RMS values from tweakwcs
+    interpret_fit_rms(imglist, reference_catalog)
+
+    # determine the quality of the fit
+    fit_rms, fit_num  = determine_fit_quality(imglist, print_fit_parameters=print_fit_parameters)
+
+    #Initialize best fit results in imglist metadata
+    for item in imglist:
+        item.best_meta = item.meta.copy()
+
+    return fit_rms, fit_num    
 
 def determine_fit_quality(imglist, print_fit_parameters=True):
     """Determine the quality of the fit to the data
