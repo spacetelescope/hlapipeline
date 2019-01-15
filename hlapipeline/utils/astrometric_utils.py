@@ -37,8 +37,9 @@ from astropy.nddata import NDData
 from astropy.convolution import Gaussian2DKernel
 from astropy.stats import gaussian_fwhm_to_sigma
 import photutils
-from photutils import detect_sources, source_properties
+from photutils import detect_sources, source_properties, deblend_sources
 from photutils import Background2D, MedianBackground
+from photutils import DAOStarFinder
 from scipy import ndimage
 
 import matplotlib.pyplot as plt
@@ -64,7 +65,7 @@ VEGASPEC = os.path.join(os.path.dirname(MODULE_PATH),
                         'data','alpha_lyr_stis_008.fits')
 
 __all__ = ['create_astrometric_catalog', 'compute_radius', 'find_gsc_offset',
-            'extract_sources', 'find_hist2d_offset', 'build_source_catalog',
+            'extract_sources', 'find_hist2d_offset', 'generate_source_catalog',
             'classify_sources', 'countExtn']
 
 """
@@ -327,6 +328,11 @@ def extract_sources(img, **pars):
 
     Parameters
     ==========
+    dqmask : array
+        Bitmask which identifies whether a pixel should be used (1) in source
+        identification or not(0). If provided, this mask will be applied to the
+        input array prior to source identification.
+        
     fwhm : float
         Full-width half-maximum (fwhm) of the PSF in pixels.
         Default: 3.0
@@ -346,6 +352,19 @@ def extract_sources(img, **pars):
         cosmic-ray, and not include those sources in the final catalog.
         Default: True
 
+    centering_mode : {'segmentation', 'starfind'}
+        Algorithm to use when computing the positions of the detected sources.
+        Centering will only take place after `threshold` has been determined, and
+        sources are identified using segmentation.  Centering using `segmentation`
+        will rely on `photutils.segmentation.source_properties` to generate the
+        properties for the source catalog.  Centering using `starfind` will use
+        `photutils.IRAFStarFinder` to characterize each source in the catalog.
+        Default: 'starfind'
+
+    nlargest : int, None
+        Number of largest (brightest) sources in each chip/array to measure 
+        when using 'starfind' mode.  Default: None (all)
+        
     output : str
         If specified, write out the catalog of sources to the file with this name
 
@@ -364,41 +383,107 @@ def extract_sources(img, **pars):
     output = pars.get('output', None)
     plot = pars.get('plot', False)
     vmax = pars.get('vmax', None)
+    centering_mode = pars.get('centering_mode', 'starfind')
+    deblend = pars.get('deblend', False)
+    dqmask = pars.get('dqmask',None)
+    nlargest = pars.get('nlargest', None)
+    # apply any provided dqmask for segmentation only
+    if dqmask is not None:
+        imgarr = img.copy()
+        imgarr[dqmask] = 0
+    else:
+        imgarr = img
+
+    bkg_estimator = MedianBackground()
+    bkg = Background2D(imgarr, (50, 50), filter_size=(3, 3),
+                       bkg_estimator=bkg_estimator)
+    bkg_rms = (5. * bkg.background_rms)
+    bkg_rms_mean = bkg.background.mean() + 5. * bkg_rms.std()
 
     if threshold is None or threshold < 0.0:
-        bkg_estimator = MedianBackground()
-        bkg = Background2D(img, (50, 50), filter_size=(3, 3),
-                           bkg_estimator=bkg_estimator)
-        default_threshold = bkg.background + (5. * bkg.background_rms)
+        default_threshold = bkg.background + bkg_rms
         if threshold is not None and threshold < 0.0:
             threshold = -1*threshold*default_threshold
             print("{} based on {}".format(threshold.max(), default_threshold.max()))
+            bkg_rms_mean = threshold.max()
         else:
             threshold = default_threshold
+    else:
+        bkg_rms_mean = 3. * threshold
+    if bkg_rms_mean < 0:
+        bkg_rms_mean = 0.
     sigma = fwhm * gaussian_fwhm_to_sigma
     kernel = Gaussian2DKernel(sigma, x_size=source_box, y_size=source_box)
     kernel.normalize()
-    segm = detect_sources(img, threshold, npixels=source_box,
+    segm = detect_sources(imgarr, threshold, npixels=source_box,
                           filter_kernel=kernel)
-    cat = source_properties(img, segm)
-    print("Total Number of detected sources: {}".format(len(cat)))
+    if deblend:
+        segm = deblend_sources(imgarr, segm, npixels=5,
+                           filter_kernel=kernel, nlevels=16,
+                           contrast=0.01)
+    # If classify is turned on, it should modify the segmentation map
     if classify:
+        cat = source_properties(imgarr, segm)
         # Remove likely cosmic-rays based on central_moments classification
-        goodsrcs = np.where(classify_sources(cat) == 1)[0].tolist()
-        newcat = photutils.segmentation.properties.SourceCatalog([])
-        for src in goodsrcs:
-            newcat._data.append(cat[src])
-    else:
-        newcat = cat
+        bad_srcs = np.where(classify_sources(cat) == 0)[0]+1
+        segm.remove_labels(bad_srcs) # CAUTION: May be time-consuming!!!
+    cat = source_properties(img, segm)
 
-    tbl = newcat.to_table()
-    print("Final Number of selected sources: {}".format(len(newcat)))
+    
+    # convert segm to mask for daofind
+    if centering_mode == 'starfind':
+        src_table = None
+        #daofind = IRAFStarFinder(fwhm=fwhm, threshold=5.*bkg.background_rms_median)
+        print("Setting up DAOStarFinder with: \n    fwhm={}  threshold={}".format(fwhm, bkg_rms_mean))
+        daofind = DAOStarFinder(fwhm=fwhm, threshold=bkg_rms_mean)
+        # Identify nbrightest/largest sources 
+        if nlargest is not None:
+            large_labels = np.flip(np.argsort(segm.areas)+1)[:nlargest]
+        print("Looking for sources in {} segments".format(len(segm.labels)))
+        
+        for label in segm.labels:
+            if nlargest is not None and label not in large_labels:
+                continue # Move on to the next segment
+            # Create mask which is blank everywhere except in the segment
+            blank_segm = np.zeros(segm.shape, dtype=np.bool)
+            blank_segm[np.where(segm.data==label)] = 1
+
+            # apply mask to original image
+            detection_img = img*blank_segm
+
+            # Detect sources in this specific segment            
+            seg_table = daofind(detection_img)
+                
+            # Pick out brightest source only
+            if src_table is None and len(seg_table) > 0:
+                # Initialize final master source list catalog
+                src_table = Table(names=seg_table.colnames,
+                                  dtype=[dt[1] for dt in seg_table.dtype.descr])
+            
+            if len(seg_table) > 0:
+                max_row = np.where(seg_table['peak'] == seg_table['peak'].max())[0][0]
+                # Add row for detected source to master catalog
+                src_table.add_row(seg_table[max_row])
+            
+    else:
+        src_table = cat.to_table()
+        # Make column names consistent with IRAFStarFinder column names
+        src_table.rename_column('source_sum', 'flux')
+        src_table.rename_column('source_sum_err', 'flux_err')
+
+    print("Total Number of detected sources: {}".format(len(src_table)))
+
+    # Move 'id' column from first to last position
+    # Makes it consistent for remainder of code
+    cnames = src_table.colnames
+    cnames.append(cnames[0])
+    del cnames[0]
+    tbl = src_table[cnames]
+
     if output:
         tbl['xcentroid'].info.format = '.10f'  # optional format
         tbl['ycentroid'].info.format = '.10f'
-        tbl['source_sum'].info.format = '.10f'
-        tbl['cxy'].info.format = '.10f'
-        tbl['cyy'].info.format = '.10f'
+        tbl['flux'].info.format = '.10f'
         if not output.endswith('.cat'):
             output += '.cat'
         tbl.write(output, format='ascii.commented_header')
@@ -408,10 +493,13 @@ def extract_sources(img, **pars):
         norm = None
         if vmax is None:
             norm = ImageNormalize(stretch=SqrtStretch())
-        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8, 8))
-        ax1.imshow(img, origin='lower', cmap='Greys_r', norm=norm, vmax=vmax)
-        ax2.imshow(segm, origin='lower', cmap=segm.cmap(random_state=12345))
-
+        fig, ax = plt.subplots(2, 2, figsize=(8, 8))
+        ax[0][0].imshow(imgarr, origin='lower', cmap='Greys_r', norm=norm, vmax=vmax)
+        ax[0][1].imshow(segm, origin='lower', cmap=segm.cmap(random_state=12345))
+        ax[0][1].set_title('Segmentation Map')
+        ax[1][0].imshow(bkg.background, origin='lower')
+        if not isinstance(threshold, float):
+            ax[1][1].imshow(threshold, origin='lower')
     return tbl, segm
 
 def classify_sources(catalog, sources=None):
@@ -522,12 +610,12 @@ def generate_source_catalog(image, **kwargs):
             photmode = image['sci',chip].header['photmode']
 
         # apply any DQ array, if available
+        dqmask = None
         if image.index_of(dqname):
             dqarr = image[dqname,chip].data
             dqmask = bitmask.bitfield_to_boolean_mask(dqarr, good_mask_value=False)
-            imgarr[dqmask] = 0. # zero-out all pixels flagged as bad
-        seg_tab, segmap = extract_sources(imgarr, **kwargs)
-        seg_tab_phot = compute_photometry(seg_tab,photmode)
+        seg_tab, segmap = extract_sources(imgarr, dqmask=dqmask, **kwargs)
+        seg_tab_phot = seg_tab #compute_photometry(seg_tab,photmode)
 
         source_cats[chip] = seg_tab_phot
 
@@ -640,7 +728,8 @@ def compute_photometry(catalog, photmode):
     vegazpt = 2.5*np.log10(vegauvis.countrate())
 
     # Use zero-point to convert flux values from catalog into magnitudes
-    source_phot = vegazpt - 2.5*np.log10(catalog['source_sum'])
+    #source_phot = vegazpt - 2.5*np.log10(catalog['source_sum'])
+    source_phot = vegazpt - 2.5*np.log10(catalog['flux'])
     source_phot.name = 'vegamag'
     # Now add this new column to the catalog table
     catalog.add_column(source_phot)
@@ -1053,7 +1142,8 @@ def build_nddata(image, group_id, source_catalog):
         # SCI extensions *of the same FITS file* so that they can be
         # aligned together.
         img = NDData(data=im_data, mask=dq_data != 0, wcs=w,
-                     meta={'chip': chip, 'group_id':group_id})
+                     meta={'chip': chip, 'group_id':group_id,
+                           'filename':image})
         # append source catalog, if provided
         if source_catalog:
             imcat = source_catalog[chip]
@@ -1069,4 +1159,3 @@ def build_nddata(image, group_id, source_catalog):
         hdulist.close()
 
     return images
-
