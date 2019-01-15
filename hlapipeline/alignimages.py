@@ -127,7 +127,7 @@ def convert_string_tf_to_boolean(invalue):
 # ----------------------------------------------------------------------------------------------------------------------
 
 
-def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False, print_fit_parameters=True):
+def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs="screen", print_fit_parameters=True):
     """Main calling function.
 
     Parameters
@@ -141,8 +141,9 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
     clobber : Boolean
         Download and overwrite existing local copies of input files?
 
-    update_hdr_wcs : Boolean
-        Write newly computed WCS information to image image headers?
+    update_hdr_wcs : String
+        Write newly computed WCS information to image headers, to seperate _hlet.fits headerlet files, or simply
+        display information on the screen?
 
     Returns
     -------
@@ -289,8 +290,8 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
 
     # 7: Write new fit solution to input image headers
     print("-------------------- STEP 7: Update image headers with new WCS information --------------------")
-    if update_hdr_wcs:
-        update_image_wcs_info(imglist, processList)
+    if update_hdr_wcs.startswith("header"):
+        update_image_wcs_info(imglist, processList,update_hdr_wcs)
         print("\nSUCCESS")
     else:
         print("\n STEP SKIPPED")
@@ -534,7 +535,7 @@ def generate_source_catalogs(imglist, **pars):
 # ----------------------------------------------------------------------------------------------------------------------
 
 
-def update_image_wcs_info(tweakwcs_output,imagelist):
+def update_image_wcs_info(tweakwcs_output,imagelist,wcs_dest):
     """Write newly computed WCS information to image headers
 
     Parameters
@@ -546,29 +547,37 @@ def update_image_wcs_info(tweakwcs_output,imagelist):
     imagelist : list
         list of valid processed images to be updated
 
+    wcs_dest : string
+        Where should the WCS information be written? update input image fits headers (header) or write to new
+        _hlet.fits headerlet file(s)?
+
+
     Returns
     -------
     Nothing!
     """
-    imgctr = 0
-    for item in tweakwcs_output:
-        if item.meta['chip'] == 1:  # to get the image name straight regardless of the number of chips
-            image_name = imagelist[imgctr]
-            if imgctr > 0: #close previously opened image
-                print("CLOSE {}".format(hdulist[0].header['FILENAME'])) #TODO: Remove before deployment
-                hdulist.flush()
-                hdulist.close()
-            hdulist = fits.open(image_name, mode='update')
-            sciExtDict = {}
-            for sciExtCtr in range(1, amutils.countExtn(hdulist) + 1): #establish correct mapping to the science extensions
-                sciExtDict["{}".format(sciExtCtr)] = fileutil.findExtname(hdulist,'sci',extver=sciExtCtr)
-            imgctr += 1
-        updatehdr.update_wcs(hdulist, sciExtDict["{}".format(item.meta['chip'])], item.wcs, wcsname='TWEAKDEV', reusename=True, verbose=True) #TODO: May want to settle on a better name for 'wcsname'
-        print()
-    print("CLOSE {}".format(hdulist[0].header['FILENAME'])) #TODO: Remove before deployment
-    hdulist.flush() #close last image
-    hdulist.close()
+    if wcs_dest == "header": #update existing input image headers
+        imgctr = 0
+        for item in tweakwcs_output:
+            if item.meta['chip'] == 1:  # to get the image name straight regardless of the number of chips
+                image_name = imagelist[imgctr]
+                if imgctr > 0: #close previously opened image
+                    print("CLOSE {}".format(hdulist[0].header['FILENAME'])) #TODO: Remove before deployment
+                    hdulist.flush()
+                    hdulist.close()
+                hdulist = fits.open(image_name, mode='update')
+                sciExtDict = {}
+                for sciExtCtr in range(1, amutils.countExtn(hdulist) + 1): #establish correct mapping to the science extensions
+                    sciExtDict["{}".format(sciExtCtr)] = fileutil.findExtname(hdulist,'sci',extver=sciExtCtr)
+                imgctr += 1
+            updatehdr.update_wcs(hdulist, sciExtDict["{}".format(item.meta['chip'])], item.wcs, wcsname='TWEAKDEV', reusename=True, verbose=True) #TODO: May want to settle on a better name for 'wcsname'
+            print()
+        print("CLOSE {}".format(hdulist[0].header['FILENAME'])) #TODO: Remove before deployment
+        hdulist.flush() #close last image
+        hdulist.close()
 
+    if wcs_dest == "headerlet": #create new headerlet files
+        print("WRITE HEADERLETS!!!")
 
 # ======================================================================================================================
 
@@ -650,9 +659,10 @@ if __name__ == '__main__':
     PARSER.add_argument( '-c', '--clobber', required=False,choices=['True','False'],default='False',help='Download and '
                     'overwrite existing local copies of input files? Unless explicitly set, the default is "False".')
 
-    PARSER.add_argument( '-u', '--update_hdr_wcs', required=False,choices=['True','False'],default='False',help='Write '
-                    'newly computed WCS information to image image headers? Unless explicitly set, the default is '
-                    '"False".')
+    PARSER.add_argument( '-u', '--update_hdr_wcs', required=False,choices=['header','headerlet','screen'],default='none'
+                         ,help='Write newly computed WCS information to image headers, to seperate _hlet.fits headerlet '
+                               'files, or simply display information on the screen? Unless explicitly set, the default '
+                               'is "screen".')
     ARGS = PARSER.parse_args()
 
     # Build list of input images
@@ -670,6 +680,5 @@ if __name__ == '__main__':
 
     clobber = convert_string_tf_to_boolean(ARGS.clobber)
 
-    update_hdr_wcs = convert_string_tf_to_boolean(ARGS.update_hdr_wcs)
     # Get to it!
-    return_value = perform_align(input_list,archive,clobber,update_hdr_wcs)
+    return_value = perform_align(input_list,archive,clobber,ARGS.update_hdr_wcs)
