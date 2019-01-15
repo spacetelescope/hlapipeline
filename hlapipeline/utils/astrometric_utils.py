@@ -174,6 +174,10 @@ def create_astrometric_catalog(inputs, **pars):
     col_types = ('f8', 'f8', 'f4', 'U25', 'U25')
     ref_table = Table(names = colnames, dtype=col_types)
 
+    # Add catalog name as meta data
+    ref_table.meta['catalog']=catalog
+    ref_table.meta['gaia_only'] = gaia_only
+
     # rename coordinate columns to be consistent with tweakwcs
     ref_table.rename_column('ra', 'RA')
     ref_table.rename_column('dec', 'DEC')
@@ -332,7 +336,7 @@ def extract_sources(img, **pars):
         Bitmask which identifies whether a pixel should be used (1) in source
         identification or not(0). If provided, this mask will be applied to the
         input array prior to source identification.
-        
+
     fwhm : float
         Full-width half-maximum (fwhm) of the PSF in pixels.
         Default: 3.0
@@ -451,20 +455,20 @@ def extract_sources(img, **pars):
             # apply mask to original image
             detection_img = img*blank_segm
 
-            # Detect sources in this specific segment            
+            # Detect sources in this specific segment
             seg_table = daofind(detection_img)
-                
+
             # Pick out brightest source only
             if src_table is None and len(seg_table) > 0:
                 # Initialize final master source list catalog
                 src_table = Table(names=seg_table.colnames,
                                   dtype=[dt[1] for dt in seg_table.dtype.descr])
-            
+
             if len(seg_table) > 0:
                 max_row = np.where(seg_table['peak'] == seg_table['peak'].max())[0][0]
                 # Add row for detected source to master catalog
                 src_table.add_row(seg_table[max_row])
-            
+
     else:
         src_table = cat.to_table()
         # Make column names consistent with IRAFStarFinder column names

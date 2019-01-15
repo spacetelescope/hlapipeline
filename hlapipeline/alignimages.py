@@ -638,11 +638,13 @@ def interpret_fit_rms(tweakwcs_output, reference_catalog):
             fit_rms = None
             ra_rms = None
             dec_rms = None
+
         item.meta['tweakwcs_info']['FIT_RMS'] = fit_rms
         item.meta['tweakwcs_info']['TOTAL_RMS'] = total_rms
         item.meta['tweakwcs_info']['NUM_FITS'] = len(group_ids)
         item.meta['tweakwcs_info']['RMS_RA'] = ra_rms
         item.meta['tweakwcs_info']['RMS_DEC'] = dec_rms
+        item.meta['tweakwcs_info']['catalog'] = reference_catalog.meta['catalog']
 
 
 # ======================================================================================================================
