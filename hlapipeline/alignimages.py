@@ -127,7 +127,8 @@ def convert_string_tf_to_boolean(invalue):
 # ----------------------------------------------------------------------------------------------------------------------
 
 
-def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False, print_fit_parameters=True):
+def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False, print_fit_parameters=True,
+                    print_git_info=False):
     """Main calling function.
 
     Parameters
@@ -152,23 +153,23 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
 
     # Define astrometric catalog list in priority order
     catalogList = ['GAIADR2', 'GSC241']
-    numCatalogs = len(catalogList)
 
     # 0: print git info
-    print("-------------------- STEP 0: Display Git revision info  --------------------")
-    full_path = os.path.dirname(__file__)+"/utils"
-    repo_path=None
-    if "hlapipeline/hlapipeline" in full_path:
-        repo_path = full_path.split("hlapipeline/hlapipeline")[0]+"hlapipeline"
-    elif "hlapipeline" in full_path:
-        repo_path = full_path.split("hlapipeline")[0]+"hlapipeline"
-    else:
-        pass
-    if not os.path.exists(repo_path): repo_path = None # protect against non-existent paths
-    if repo_path:
-        get_git_rev_info.print_rev_id(repo_path) # Display git repository information
-    else:
-        print("WARNING: Unable to display Git repository revision information.")
+    if print_git_info:
+        print("-------------------- STEP 0: Display Git revision info  --------------------")
+        full_path = os.path.dirname(__file__)+"/utils"
+        repo_path=None
+        if "hlapipeline/hlapipeline" in full_path:
+            repo_path = full_path.split("hlapipeline/hlapipeline")[0]+"hlapipeline"
+        elif "hlapipeline" in full_path:
+            repo_path = full_path.split("hlapipeline")[0]+"hlapipeline"
+        else:
+            pass
+        if not os.path.exists(repo_path): repo_path = None # protect against non-existent paths
+        if repo_path:
+            get_git_rev_info.print_rev_id(repo_path) # Display git repository information
+        else:
+            print("WARNING: Unable to display Git repository revision information.")
 
     # 1: Interpret input data and optional parameters
     print("-------------------- STEP 1: Get data --------------------")
@@ -241,12 +242,12 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
         best_fit_rms, best_fit_num = match_2dhist_fit(imglist, reference_catalog,
                                      print_fit_parameters=print_fit_parameters)
 
-        # 6b: If available, the logic tree for fitting with different algorithms 
-        # would be here.   These would only be invoked if the above step failed.  
-        # At this time, only one algorithm is being used and there are not 
-        # currently other cases to run on the images and so this is empty.   This 
+        # 6b: If available, the logic tree for fitting with different algorithms
+        # would be here.   These would only be invoked if the above step failed.
+        # At this time, only one algorithm is being used and there are not
+        # currently other cases to run on the images and so this is empty.   This
         # section might be a good area to create as a function if this will be repeated
-        # with other catalogs. 
+        # with other catalogs.
 
 
     # 8: If available, try the fitting with different catalogs
@@ -267,7 +268,7 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
 
                 fit_rms, fit_num = match_default_fit(imglist, reference_catalog,
                                      print_fit_parameters=print_fit_parameters)
-                # update the best fit 
+                # update the best fit
                 if fit_rms < best_fit_rms:
                    best_fit_rms = fit_rms
                    best_fit_num = fit_num
@@ -298,27 +299,27 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
 
 def match_default_fit(imglist, reference_catalog, print_fit_parameters=True):
     """Perform cross-matching and final fit using 2dHistogram matching
-    
+
     Parameters
     ----------
     imglist : list
         List of input image NDData objects with metadata and source catalogs
-        
+
     reference_catalog : Table
         Astropy Table of reference sources for this field
-    
+
     print_fit_parameters: bool
         Specify whether or not to print out FIT results for each chip
-        
+
 
     Returns
     --------
-    fit_rms : float     
-        Visit level RMS for the FIT 
-        
+    fit_rms : float
+        Visit level RMS for the FIT
+
     fit_num : int
         Number of sources used to generate visit level FIT and `fit_rms`
-        
+
     """
     # Specify matching algorithm to use
     match = tweakwcs.TPMatch(searchrad=250, separation=0.1,
@@ -336,27 +337,27 @@ def match_default_fit(imglist, reference_catalog, print_fit_parameters=True):
 
 def match_2dhist_fit(imglist, reference_catalog, print_fit_parameters=True):
     """Perform cross-matching and final fit using 2dHistogram matching
-    
+
     Parameters
     ----------
     imglist : list
         List of input image NDData objects with metadata and source catalogs
-        
+
     reference_catalog : Table
         Astropy Table of reference sources for this field
-    
+
     print_fit_parameters: bool
         Specify whether or not to print out FIT results for each chip
-        
+
 
     Returns
     --------
-    fit_rms : float     
-        Visit level RMS for the FIT 
-        
+    fit_rms : float
+        Visit level RMS for the FIT
+
     fit_num : int
         Number of sources used to generate visit level FIT and `fit_rms`
-        
+
     """
     print("-------------------- STEP 5b: Cross matching and fitting --------------------")
     # Specify matching algorithm to use
@@ -374,7 +375,7 @@ def match_2dhist_fit(imglist, reference_catalog, print_fit_parameters=True):
     for item in imglist:
         item.best_meta = item.meta.copy()
 
-    return fit_rms, fit_num    
+    return fit_rms, fit_num
 
 def determine_fit_quality(imglist, print_fit_parameters=True):
     """Determine the quality of the fit to the data
@@ -404,7 +405,7 @@ def determine_fit_quality(imglist, print_fit_parameters=True):
     tweakwcs_info_keys = OrderedDict(imglist[0].meta['tweakwcs_info']).keys()
     max_rms_val = 1e9
     num_xmatches = 0
-    
+
     for item in imglist:
         image_name = item.meta['name']
         #Handle fitting failures (no matches found)
@@ -614,8 +615,13 @@ def interpret_fit_rms(tweakwcs_output, reference_catalog):
                     img_coords = SkyCoord(tinfo['fit_RA'], tinfo['fit_DEC'],
                                           unit='deg',frame='icrs')
                     ref_coords = SkyCoord(ref_RA, ref_DEC, unit='deg',frame='icrs')
+                    dra, ddec = img_coords.spherical_offsets_to(ref_coords)
+                    ra_rms = np.std(dra.to(u.mas))
+                    dec_rms = np.std(ddec.to(u.mas))
                     fit_rms = np.std(Angle(img_coords.separation(ref_coords), unit=u.mas)).value
-                    group_dict[group_id]['FIT_RMS'] = fit_rms # as an Angle object
+                    group_dict[group_id]['FIT_RMS'] = fit_rms
+                    group_dict[group_id]['RMS_RA'] = ra_rms
+                    group_dict[group_id]['RMS_DEC'] = dec_rms
                     obs_rms.append(fit_rms)
     # Compute RMS for entire ASN/observation set
     total_rms = np.mean(obs_rms)
@@ -626,12 +632,17 @@ def interpret_fit_rms(tweakwcs_output, reference_catalog):
         group_id = item.meta['group_id']
         if group_id in group_dict:
             fit_rms = group_dict[group_id]['FIT_RMS']
+            ra_rms = group_dict[group_id]['RMS_RA']
+            dec_rms = group_dict[group_id]['RMS_DEC']
         else:
             fit_rms = None
+            ra_rms = None
+            dec_rms = None
         item.meta['tweakwcs_info']['FIT_RMS'] = fit_rms
         item.meta['tweakwcs_info']['TOTAL_RMS'] = total_rms
         item.meta['tweakwcs_info']['NUM_FITS'] = len(group_ids)
-
+        item.meta['tweakwcs_info']['RMS_RA'] = ra_rms
+        item.meta['tweakwcs_info']['RMS_DEC'] = dec_rms
 
 
 # ======================================================================================================================
