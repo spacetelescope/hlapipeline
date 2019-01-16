@@ -294,10 +294,12 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
     if update_hdr_wcs:
         updated_image_list,headerlet_list = update_image_wcs_info(imglist, processList)
         print("\nSUCCESS")
-        for img,hlet in zip(updated_image_list,headerlet_list): print(">>>> {} {}".format(img,hlet))
     else:
+        updated_image_list = []
+        headerlet_list = []
         print("\n STEP SKIPPED")
-    return (0)
+    output_dictionary = generate_final_output_dict(imglist,updated_image_list,headerlet_list)
+    return (output_dictionary)
 
 def match_default_fit(imglist, reference_catalog, print_fit_parameters=True):
     """Perform cross-matching and final fit using 2dHistogram matching
@@ -471,7 +473,39 @@ def generate_astrometric_catalog(imglist, **pars):
 
 
 # ----------------------------------------------------------------------------------------------------------------------
+def generate_final_output_dict(imglist,updated_image_list,headerlet_list):
+    """Generates the dictionary that will be returned by perform_align.
 
+    Parameters
+    ----------
+    imglist : list
+        output of tweakwcs. Contains sourcelist tables, newly computed WCS info, etc. for every chip of every valid
+        input image.
+
+    updated_image_list : list
+        list of images updated by subroutine update_image_wcs_info().
+
+    headerlet_list : list
+        list of headerlet files created by subroutine update_image_wcs_info().
+
+    Returns
+    -------
+    out_dict : dictionary
+        Dictionary containing list of headerlet names, status, reason, list of updated images, astrometric catalog
+        name, list of the number of matches for each chip of each image, and the overall fit_rms value.
+    """
+    out_dict = {}
+    out_dict["headerlet files"] = headerlet_list
+    out_dict["status"] = ""
+    out_dict["reason"] = ""
+    out_dict["status"] = ""
+    out_dict["updated image files"] = updated_image_list
+    out_dict["catalog name"] = imglist[0].meta['tweakwcs_info']['catalog']
+    out_dict["nmatches"] = []
+    out_dict["fit_rms"] = ""
+
+    return(out_dict)
+# ----------------------------------------------------------------------------------------------------------------------
 
 def generate_source_catalogs(imglist, **pars):
     """Generates a dictionary of source catalogs keyed by image name.
