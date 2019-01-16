@@ -298,7 +298,7 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
         updated_image_list = []
         headerlet_list = []
         print("\n STEP SKIPPED")
-    output_dictionary = generate_final_output_dict(imglist,updated_image_list,headerlet_list)
+    output_dictionary = generate_final_output_dict(imglist,updated_image_list,headerlet_list,best_fit_rms)
     return (output_dictionary)
 
 def match_default_fit(imglist, reference_catalog, print_fit_parameters=True):
@@ -473,7 +473,7 @@ def generate_astrometric_catalog(imglist, **pars):
 
 
 # ----------------------------------------------------------------------------------------------------------------------
-def generate_final_output_dict(imglist,updated_image_list,headerlet_list):
+def generate_final_output_dict(imglist,updated_image_list,headerlet_list,best_fit_rms):
     """Generates the dictionary that will be returned by perform_align.
 
     Parameters
@@ -488,21 +488,32 @@ def generate_final_output_dict(imglist,updated_image_list,headerlet_list):
     headerlet_list : list
         list of headerlet files created by subroutine update_image_wcs_info().
 
+    best_fit_rms: float
+        Visit level RMS for the FIT
+
+
     Returns
     -------
     out_dict : dictionary
         Dictionary containing list of headerlet names, status, reason, list of updated images, astrometric catalog
         name, list of the number of matches for each chip of each image, and the overall fit_rms value.
     """
+    # initialize dictionary entries with the actual values if possible and placeholders as need be.
     out_dict = {}
     out_dict["headerlet files"] = headerlet_list
-    out_dict["status"] = ""
-    out_dict["reason"] = ""
-    out_dict["status"] = ""
+    out_dict["status"] = "SUCCESS"
+    out_dict["reason"] = "" #TODO: Properly populate this field.
     out_dict["updated image files"] = updated_image_list
     out_dict["catalog name"] = imglist[0].meta['tweakwcs_info']['catalog']
     out_dict["nmatches"] = []
-    out_dict["fit_rms"] = ""
+    out_dict["fit_rms"] = best_fit_rms
+
+    #loop over imglist to fill in the rest
+    for item in imglist:
+        if item.meta['tweakwcs_info']['status'] != "SUCCESS":
+            out_dict["status"] = item.meta['tweakwcs_info']['status']
+            nmatches.append(item.meta['tweakwcs_info']['nmatches'])
+
 
     return(out_dict)
 # ----------------------------------------------------------------------------------------------------------------------
@@ -763,3 +774,6 @@ if __name__ == '__main__':
     startTime = time.time()
     return_value = perform_align(input_list,archive,clobber,update_hdr_wcs)
     print("Processing time = {} seconds".format(time.time() - startTime))
+
+    for key in return_value.keys():
+        print("{}: {}".format(key,return_value[key]))
