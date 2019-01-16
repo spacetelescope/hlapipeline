@@ -128,7 +128,7 @@ def convert_string_tf_to_boolean(invalue):
 # ----------------------------------------------------------------------------------------------------------------------
 
 
-def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs="screen", print_fit_parameters=True):
+def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False, print_fit_parameters=True):
     """Main calling function.
 
     Parameters
@@ -142,9 +142,8 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs="scre
     clobber : Boolean
         Download and overwrite existing local copies of input files?
 
-    update_hdr_wcs : String
-        Write newly computed WCS information to image headers, to seperate _hlet.fits headerlet files, or simply
-        display information on the screen?
+    update_hdr_wcs : Boolean
+        Write newly computed WCS information to image image headers?
 
     Returns
     -------
@@ -298,9 +297,10 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs="scre
             item.meta = item.best_meta
     # 7: Write new fit solution to input image headers
     print("-------------------- STEP 7: Update image headers with new WCS information --------------------")
-    if update_hdr_wcs.startswith("header"):
-        out_file_list = update_image_wcs_info(imglist, processList,update_hdr_wcs)
+    if update_hdr_wcs:
+        updated_image_list,headerlet_list = update_image_wcs_info(imglist, processList)
         print("\nSUCCESS")
+        for img,hlet in zip(updated_image_list,headerlet_list): print(">>>> {} {}".format(img,hlet))
     else:
         print("\n STEP SKIPPED")
     return (0)
@@ -543,7 +543,7 @@ def generate_source_catalogs(imglist, **pars):
 # ----------------------------------------------------------------------------------------------------------------------
 
 
-def update_image_wcs_info(tweakwcs_output,imagelist,wcs_dest):
+def update_image_wcs_info(tweakwcs_output,imagelist):
     """Write newly computed WCS information to image headers
 
     Parameters
@@ -555,17 +555,13 @@ def update_image_wcs_info(tweakwcs_output,imagelist,wcs_dest):
     imagelist : list
         list of valid processed images to be updated
 
-    wcs_dest : string
-        Where should the WCS information be written? update input image fits headers (header) or write to new
-        _hlet.fits headerlet file(s)?
-
     Returns
     -------
     out_file_list : list
         a list of the updated images files if wcs_dest = 'header', or a list of the newly created headerlet files if wcs_dest = 'headerlet'.
     """
-    out_file_list=[]
-
+    out_image_list=[]
+    out_headerlet_list=[]
     imgctr = 0
     for item in tweakwcs_output:
         if item.meta['chip'] == 1:  # to get the image name straight regardless of the number of chips
@@ -575,21 +571,19 @@ def update_image_wcs_info(tweakwcs_output,imagelist,wcs_dest):
                 print("CLOSE {}\n".format(imageName)) #TODO: Remove before deployment
                 hdulist.flush()
                 hdulist.close()
-                if wcs_dest == "headerlet":
-                    out_headerlet = headerlet.create_headerlet(imageName, hdrname=wcsName, wcsname=wcsName)
+                out_image_list.append(imageName)
+                # Create headerlet
+                out_headerlet = headerlet.create_headerlet(imageName, hdrname=wcsName, wcsname=wcsName)
 
-                    # TODO: First of two calls to Michele's update headerlet subroutine goes here!
+                # TODO: First of two calls to Michele's update headerlet subroutine goes here!
 
-                    if imageName.endswith("flc.fits"):
-                        headerlet_filename = imageName.replace("flc", "flt_hlet")
-                    if imageName.endswith("flt.fits"):
-                        headerlet_filename = imageName.replace("flt", "flt_hlet")
-                    out_headerlet.writeto(headerlet_filename,clobber=True)
-                    print("Wrote headerlet file {}.\n\n".format(headerlet_filename))
-                    out_file_list.append(headerlet_filename)
-                else:
-                    out_file_list.append(imageName)
-
+                if imageName.endswith("flc.fits"):
+                    headerlet_filename = imageName.replace("flc", "flt_hlet")
+                if imageName.endswith("flt.fits"):
+                    headerlet_filename = imageName.replace("flt", "flt_hlet")
+                out_headerlet.writeto(headerlet_filename,clobber=True)
+                print("Wrote headerlet file {}.\n\n".format(headerlet_filename))
+                out_headerlet_list.append(headerlet_filename)
             hdulist = fits.open(image_name, mode='update')
             #generate wcs name for updated image header, headerlet
             if not hdulist['SCI',1].header['WCSNAME'] or hdulist['SCI',1].header['WCSNAME'] =="": #Just in case header value 'wcsname' is empty.
@@ -607,21 +601,19 @@ def update_image_wcs_info(tweakwcs_output,imagelist,wcs_dest):
     print("CLOSE {}\n".format(imageName)) #TODO: Remove before deployment
     hdulist.flush() #close last image
     hdulist.close()
-    if wcs_dest == "headerlet":
-        out_headerlet = headerlet.create_headerlet(imageName, hdrname=wcsName, wcsname=wcsName)
+    out_image_list.append(imageName)
+    out_headerlet = headerlet.create_headerlet(imageName, hdrname=wcsName, wcsname=wcsName)
 
-        # TODO: Second of two calls to Michele's update headerlet subroutine goes here!
+    # TODO: Second of two calls to Michele's update headerlet subroutine goes here!
 
-        if imageName.endswith("flc.fits"):
-            headerlet_filename = imageName.replace("flc", "hlet")
-        if imageName.endswith("flt.fits"):
-            headerlet_filename = imageName.replace("flt", "hlet")
-        out_headerlet.writeto(headerlet_filename,clobber=True)
-        print("Wrote headerlet file {}.\n\n".format(headerlet_filename))
-        out_file_list.append(headerlet_filename)
-    else:
-        out_file_list.append(imageName)
-    return(out_file_list)
+    if imageName.endswith("flc.fits"):
+        headerlet_filename = imageName.replace("flc", "hlet")
+    if imageName.endswith("flt.fits"):
+        headerlet_filename = imageName.replace("flt", "hlet")
+    out_headerlet.writeto(headerlet_filename,clobber=True)
+    print("Wrote headerlet file {}.\n\n".format(headerlet_filename))
+    out_headerlet_list.append(headerlet_filename)
+    return(out_image_list,out_headerlet_list)
 
 # ======================================================================================================================
 
@@ -705,10 +697,9 @@ if __name__ == '__main__':
     PARSER.add_argument( '-c', '--clobber', required=False,choices=['True','False'],default='False',help='Download and '
                     'overwrite existing local copies of input files? Unless explicitly set, the default is "False".')
 
-    PARSER.add_argument( '-u', '--update_hdr_wcs', required=False,choices=['header','headerlet','screen'],default='none'
-                         ,help='Write newly computed WCS information to image headers, to seperate _hlet.fits headerlet '
-                               'files, or simply display information on the screen? Unless explicitly set, the default '
-                               'is "screen".')
+    PARSER.add_argument( '-u', '--update_hdr_wcs', required=False,choices=['True','False'],default='False',help='Write '
+                    'newly computed WCS information to image image headers and create headerlet files? Unless explicitly '
+                    'set, the default is "False".')
     ARGS = PARSER.parse_args()
 
     # Build list of input images
@@ -726,7 +717,9 @@ if __name__ == '__main__':
 
     clobber = convert_string_tf_to_boolean(ARGS.clobber)
 
+    update_hdr_wcs = convert_string_tf_to_boolean(ARGS.update_hdr_wcs)
+
     # Get to it!
     startTime = time.time()
-    return_value = perform_align(input_list,archive,clobber,ARGS.update_hdr_wcs)
+    return_value = perform_align(input_list,archive,clobber,update_hdr_wcs)
     print("Processing time = {} seconds".format(time.time() - startTime))
