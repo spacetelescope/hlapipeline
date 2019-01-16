@@ -240,6 +240,10 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs="scre
         skip_all_other_steps = True
     else:
         print("-------------------- STEP 5b: Cross matching and fitting --------------------")
+        # set "catalog_name" values in imglist
+        for imglistIndex in range(0,len(imglist)):
+            imglist[imglistIndex].meta['catalog_name'] = catalogList[catalogIndex]
+
         best_fit_rms, best_fit_num = match_2dhist_fit(imglist, reference_catalog,
                                      print_fit_parameters=print_fit_parameters)
 
@@ -269,6 +273,11 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs="scre
 
                 fit_rms, fit_num = match_default_fit(imglist, reference_catalog,
                                      print_fit_parameters=print_fit_parameters)
+
+                #update "catalog_name" values in imglist
+                for imglistIndex in range(0, len(imglist)):
+                    imglist[imglistIndex].meta['catalog_name'] = catalogList[catalogIndex]
+
                 # update the best fit 
                 if fit_rms < best_fit_rms:
                    best_fit_rms = fit_rms
@@ -287,8 +296,6 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs="scre
         # update to the meta information with the lowest rms if it is reasonable
         for item in imglist:
             item.meta = item.best_meta
-
-
     # 7: Write new fit solution to input image headers
     print("-------------------- STEP 7: Update image headers with new WCS information --------------------")
     if update_hdr_wcs.startswith("header"):
@@ -557,7 +564,6 @@ def update_image_wcs_info(tweakwcs_output,imagelist,wcs_dest):
     out_file_list : list
         a list of the updated images files if wcs_dest = 'header', or a list of the newly created headerlet files if wcs_dest = 'headerlet'.
     """
-    wcsName = 'TWEAKDEV'
     out_file_list=[]
 
     imgctr = 0
@@ -565,39 +571,56 @@ def update_image_wcs_info(tweakwcs_output,imagelist,wcs_dest):
         if item.meta['chip'] == 1:  # to get the image name straight regardless of the number of chips
             image_name = imagelist[imgctr]
             if imgctr > 0: #close previously opened image
-                print("CLOSE {}".format(hdulist[0].header['FILENAME'])) #TODO: Remove before deployment
+                imageName = hdulist[0].header['FILENAME']
+                print("CLOSE {}\n".format(imageName)) #TODO: Remove before deployment
                 hdulist.flush()
                 hdulist.close()
-                out_file_list.append("{}".format(hdulist[0].header['FILENAME']))
+                if wcs_dest == "headerlet":
+                    out_headerlet = headerlet.create_headerlet(imageName, hdrname=wcsName, wcsname=wcsName)
+
+                    # TODO: First of two calls to Michele's update headerlet subroutine goes here!
+
+                    if imageName.endswith("flc.fits"):
+                        headerlet_filename = imageName.replace("flc", "flt_hlet")
+                    if imageName.endswith("flt.fits"):
+                        headerlet_filename = imageName.replace("flt", "flt_hlet")
+                    out_headerlet.writeto(headerlet_filename,clobber=True)
+                    print("Wrote headerlet file {}.\n\n".format(headerlet_filename))
+                    out_file_list.append(headerlet_filename)
+                else:
+                    out_file_list.append(imageName)
 
             hdulist = fits.open(image_name, mode='update')
+            #generate wcs name for updated image header, headerlet
+            if not hdulist['SCI',1].header['WCSNAME'] or hdulist['SCI',1].header['WCSNAME'] =="": #Just in case header value 'wcsname' is empty.
+                wcsName = "FIT_{}".format(item.meta['catalog_name'])
+            else:
+                wcsName = "{}-FIT_{}".format(hdulist['SCI',1].header['WCSNAME'],item.meta['catalog_name'])
+
             sciExtDict = {}
             for sciExtCtr in range(1, amutils.countExtn(hdulist) + 1): #establish correct mapping to the science extensions
                 sciExtDict["{}".format(sciExtCtr)] = fileutil.findExtname(hdulist,'sci',extver=sciExtCtr)
             imgctr += 1
-        updatehdr.update_wcs(hdulist, sciExtDict["{}".format(item.meta['chip'])], item.wcs, wcsname=wcsName, reusename=True, verbose=True) #TODO: May want to settle on a better name for 'wcsname'
+        updatehdr.update_wcs(hdulist, sciExtDict["{}".format(item.meta['chip'])], item.wcs, wcsname=wcsName, reusename=True, verbose=True)
         print()
-    print("CLOSE {}".format(hdulist[0].header['FILENAME'])) #TODO: Remove before deployment
+    imageName = hdulist[0].header['FILENAME']
+    print("CLOSE {}\n".format(imageName)) #TODO: Remove before deployment
     hdulist.flush() #close last image
     hdulist.close()
-    out_file_list.append("{}".format(hdulist[0].header['FILENAME']))
-
-
     if wcs_dest == "headerlet":
-        wcs_filelist = []
-        print("Generating headerlet files...")
-        for imageName in out_file_list:
-            out_headerlet = headerlet.create_headerlet(imageName,hdrname=wcsName,wcsname=wcsName)
-            if imageName.endswith("flc.fits"):
-                headerlet_filename = imageName.replace("flc","hlet")
-            if imageName.endswith("flt.fits"):
-                headerlet_filename = imageName.replace("flt","hlet")
-            out_headerlet.writeto(headerlet_filename)
-            print("Wrote headerlet file {}.".format(headerlet_filename))
-            wcs_filelist.append(headerlet_filename)
-        out_file_list = wcs_filelist
+        out_headerlet = headerlet.create_headerlet(imageName, hdrname=wcsName, wcsname=wcsName)
 
+        # TODO: Second of two calls to Michele's update headerlet subroutine goes here!
 
+        if imageName.endswith("flc.fits"):
+            headerlet_filename = imageName.replace("flc", "hlet")
+        if imageName.endswith("flt.fits"):
+            headerlet_filename = imageName.replace("flt", "hlet")
+        out_headerlet.writeto(headerlet_filename,clobber=True)
+        print("Wrote headerlet file {}.\n\n".format(headerlet_filename))
+        out_file_list.append(headerlet_filename)
+    else:
+        out_file_list.append(imageName)
     return(out_file_list)
 
 # ======================================================================================================================
@@ -669,6 +692,8 @@ def interpret_fit_rms(tweakwcs_output, reference_catalog):
 
 if __name__ == '__main__':
     import argparse
+    import time
+
     PARSER = argparse.ArgumentParser(description='Align images')
     PARSER.add_argument('raw_input_list', nargs='+', help='A space-separated list of fits files to align, or a simple '
                     'text file containing a list of fits files to align, one per line')
@@ -702,4 +727,6 @@ if __name__ == '__main__':
     clobber = convert_string_tf_to_boolean(ARGS.clobber)
 
     # Get to it!
+    startTime = time.time()
     return_value = perform_align(input_list,archive,clobber,ARGS.update_hdr_wcs)
+    print("Processing time = {} seconds".format(time.time() - startTime))
