@@ -366,9 +366,9 @@ def extract_sources(img, **pars):
         Default: 'starfind'
 
     nlargest : int, None
-        Number of largest (brightest) sources in each chip/array to measure 
+        Number of largest (brightest) sources in each chip/array to measure
         when using 'starfind' mode.  Default: None (all)
-        
+
     output : str
         If specified, write out the catalog of sources to the file with this name
 
@@ -431,45 +431,51 @@ def extract_sources(img, **pars):
         # Remove likely cosmic-rays based on central_moments classification
         bad_srcs = np.where(classify_sources(cat) == 0)[0]+1
         segm.remove_labels(bad_srcs) # CAUTION: May be time-consuming!!!
-    cat = source_properties(img, segm)
 
-    
+
     # convert segm to mask for daofind
     if centering_mode == 'starfind':
         src_table = None
         #daofind = IRAFStarFinder(fwhm=fwhm, threshold=5.*bkg.background_rms_median)
         print("Setting up DAOStarFinder with: \n    fwhm={}  threshold={}".format(fwhm, bkg_rms_mean))
         daofind = DAOStarFinder(fwhm=fwhm, threshold=bkg_rms_mean)
-        # Identify nbrightest/largest sources 
+        # Identify nbrightest/largest sources
         if nlargest is not None:
+            if nlargest > len(segm.labels):
+                nlargest = len(segm.labels)
             large_labels = np.flip(np.argsort(segm.areas)+1)[:nlargest]
         print("Looking for sources in {} segments".format(len(segm.labels)))
-        
+
         for label in segm.labels:
             if nlargest is not None and label not in large_labels:
                 continue # Move on to the next segment
-            # Create mask which is blank everywhere except in the segment
-            blank_segm = np.zeros(segm.shape, dtype=np.bool)
-            blank_segm[np.where(segm.data==label)] = 1
+            # Get slice definition for the segment with this label
+            seg_slice = segm.segments[label-1].slices
+            seg_yoffset = seg_slice[0].start
+            seg_xoffset = seg_slice[1].start
 
-            # apply mask to original image
-            detection_img = img*blank_segm
+            #Define raw data from this slice
+            detection_img = img[seg_slice]
+            # zero out any pixels which do not have this segments label
+            detection_img[np.where(segm.data[seg_slice]==0)] = 0
 
             # Detect sources in this specific segment
             seg_table = daofind(detection_img)
-
             # Pick out brightest source only
             if src_table is None and len(seg_table) > 0:
                 # Initialize final master source list catalog
                 src_table = Table(names=seg_table.colnames,
                                   dtype=[dt[1] for dt in seg_table.dtype.descr])
-
             if len(seg_table) > 0:
                 max_row = np.where(seg_table['peak'] == seg_table['peak'].max())[0][0]
                 # Add row for detected source to master catalog
+                # apply offset to slice to convert positions into full-frame coordinates
+                seg_table['xcentroid'] += seg_xoffset
+                seg_table['ycentroid'] += seg_yoffset
                 src_table.add_row(seg_table[max_row])
 
     else:
+        cat = source_properties(img, segm)
         src_table = cat.to_table()
         # Make column names consistent with IRAFStarFinder column names
         src_table.rename_column('source_sum', 'flux')
