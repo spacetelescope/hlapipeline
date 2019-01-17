@@ -403,7 +403,7 @@ def determine_fit_quality(imglist, print_fit_parameters=True):
     Returns
     -------
     max_rms_val : float
-        The best Totol rms dteremined from all of the images
+        The best Total rms determined from all of the images
 
     num_xmatches: int
         The number of stars used in matching the data
@@ -509,13 +509,13 @@ def generate_final_output_dict(imglist,updated_image_list,headerlet_list,best_fi
     out_dict["updated image files"] = updated_image_list
     out_dict["catalog name"] = imglist[0].meta['tweakwcs_info']['catalog']
     out_dict["nmatches"] = []
-    out_dict["fit_rms"] = best_fit_rms
+    out_dict["visit_fit_rms"] = best_fit_rms
 
     #loop over imglist to fill in the rest
     for item in imglist:
         if item.meta['tweakwcs_info']['status'] != "SUCCESS":
             out_dict["status"] = item.meta['tweakwcs_info']['status']
-            nmatches.append(item.meta['tweakwcs_info']['nmatches'])
+        out_dict["nmatches"].append(item.meta['tweakwcs_info']['nmatches'])
 
 
     return(out_dict)
