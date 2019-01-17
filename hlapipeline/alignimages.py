@@ -226,57 +226,47 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
 
     # add the name of the image to the imglist object
     print("\nSUCCESS")
-
     # 5: Retrieve list of astrometric sources from database
-    catalogIndex = 0
-    best_fit = MAX_FIT_LIMIT
-    print("-------------------- STEP 5: Detect Gaia astrometric sources --------------------")
-    print("Astrometric Catalog: ",catalogList[catalogIndex])
-    reference_catalog = generate_astrometric_catalog(processList, catalog=catalogList[catalogIndex])
 
-    if len(reference_catalog) < MIN_CATALOG_THRESHOLD:
-        print("Not enough sources found in Gaia catalog " + catalogList[catalogIndex])
-        print("Try again with other catalog")
-        catalogIndex += 1
-        retry_fit = True
-        skip_all_other_steps = True
-    else:
-        print("-------------------- STEP 5b: Cross matching and fitting --------------------")
-        best_fit_rms, best_fit_num = match_2dhist_fit(imglist, reference_catalog,
-                                     print_fit_parameters=print_fit_parameters)
+    best_fit_rms = -99999.0
+    fit_algorithm_list= ['hack_2d_hist','default']
+    for catalogIndex in range(0, len(catalogList)): #loop over astrometric catalog
+        print("-------------------- STEP 5: Detect astrometric sources --------------------")
+        print("Astrometric Catalog: ",catalogList[catalogIndex])
+        reference_catalog = generate_astrometric_catalog(processList, catalog=catalogList[catalogIndex])
 
-        # 6b: If available, the logic tree for fitting with different algorithms
-        # would be here.   These would only be invoked if the above step failed.
-        # At this time, only one algorithm is being used and there are not
-        # currently other cases to run on the images and so this is empty.   This
-        # section might be a good area to create as a function if this will be repeated
-        # with other catalogs.
-
-
-    # 8: If available, try the fitting with different catalogs
-    if best_fit_rms > MAX_FIT_RMS:
-        for catalogIndex in range(1, len(catalogList)):
-            print("-------------------- STEP 6: Detect catalog astrometric sources --------------------")
-            print("Astrometric Catalog: ",catalogList[catalogIndex])
-            reference_catalog = generate_astrometric_catalog(processList, catalog=catalogList[catalogIndex])
-
-            if len(reference_catalog) < MIN_CATALOG_THRESHOLD:
-                print("Not enough sources found in catalog " + catalogList[catalogIndex])
-                print("Try again with other catalog")
-                catalogIndex += 1
-                retry_fit = True
-                skip_all_other_steps = True
-            else:
-                print("-------------------- STEP 6b: Cross matching and fitting --------------------")
-
-                fit_rms, fit_num = match_default_fit(imglist, reference_catalog,
-                                     print_fit_parameters=print_fit_parameters)
+        if len(reference_catalog) < MIN_CATALOG_THRESHOLD:
+            print("Not enough sources found in catalog " + catalogList[catalogIndex])
+            print("Try again with other catalog")
+            # catalogIndex += 1
+            # retry_fit = True
+            # skip_all_other_steps = True
+        else:
+            print("-------------------- STEP 5b: Cross matching and fitting --------------------")
+            for algorithm_name in fit_algorithm_list: #loop over fit algorithm type
+                print("------------------ ------------------ ------------------ {} {} ------------------ ------------------ ------------------".format(catalogList[catalogIndex],algorithm_name))
+                if algorithm_name == "hack_2d_hist":
+                    fit_rms, fit_num = match_2dhist_fit(imglist, reference_catalog,
+                                         print_fit_parameters=print_fit_parameters)
+                if algorithm_name == "default":
+                    fit_rms, fit_num = match_default_fit(imglist, reference_catalog,
+                                                         print_fit_parameters=print_fit_parameters)
                 # update the best fit
-                if fit_rms < best_fit_rms:
-                   best_fit_rms = fit_rms
-                   best_fit_num = fit_num
-                   for item in imglist:
-                       item.best_meta = item.meta.copy()
+                if best_fit_rms >= 0.:
+                    if fit_rms < best_fit_rms:
+                        best_fit_rms = fit_rms
+                        best_fit_num = fit_num
+                        for item in imglist:
+                            item.best_meta = item.meta.copy()
+                else:
+                    best_fit_rms = fit_rms
+                    best_fit_num = fit_num
+                foo = input()
+
+
+
+
+
 
     # 7: Write new fit solution to input image headers
     print("-------------------- STEP 7: Update image headers with new WCS information --------------------")
