@@ -37,6 +37,7 @@ MIN_CROSS_MATCHES = 3
 MIN_FIT_MATCHES = 6
 MAX_FIT_RMS = 10 # RMS now in mas, 1.0
 MAX_FIT_LIMIT = 1000 # Maximum RMS that a result is useful
+MAX_SOURCES_PER_CHIP = 250  # Maximum number of sources per chip to include in source catalog
 
 # Module-level dictionary contains instrument/detector-specific parameters used later on in the script.
 detector_specific_params = {"acs":
@@ -201,7 +202,9 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
 
     # 4: Extract catalog of observable sources from each input image
     print("-------------------- STEP 4: Source finding --------------------")
-    extracted_sources = generate_source_catalogs(processList, centering_mode='starfind', nlargest=100)
+    extracted_sources = generate_source_catalogs(processList,
+                                                 centering_mode='starfind',
+                                                 nlargest=MAX_SOURCES_PER_CHIP)
 
     for imgname in extracted_sources.keys():
         table=extracted_sources[imgname]["catalog_table"]
