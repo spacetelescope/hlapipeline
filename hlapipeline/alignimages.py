@@ -146,6 +146,12 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
     update_hdr_wcs : Boolean
         Write newly computed WCS information to image image headers?
 
+    print_fit_parameters : Boolean
+        Specify whether or not to print out FIT results for each chip.
+
+    print_git_info : Boolean
+        Display git repository information?
+
     Returns
     -------
     int value 0 if successful, int value 1 if unsuccessful
@@ -214,17 +220,7 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
         if total_num_sources < MIN_OBSERVABLE_THRESHOLD:
             print("Not enough sources ({}) found in image {}".format(total_num_sources,imgname))
             return(1)
-    # Convert input images to tweakwcs-compatible NDData objects and
-    # attach source catalogs to them.
-    # imglist = []
-    # for group_id, image in enumerate(processList):
-    #     img = amutils.build_nddata(image, group_id,
-    #                                extracted_sources[image]['catalog_table'])
-    #     for im in img:
-    #         im.meta['name'] = image
-    #     imglist.extend(img)
 
-    # add the name of the image to the imglist object
     print("\nSUCCESS")
     # 5: Retrieve list of astrometric sources from database
 
@@ -253,17 +249,18 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
                         im.meta['name'] = image
                     imglist.extend(img)
 
+                #copy in best-fit solution to newly initialized imglist
                 if best_fit_rms >= 0.:
                     for item,temp_item in zip(imglist,imglist_temp):
                         item.best_meta = temp_item.best_meta.copy()
 
+                #execute the correct fitting/matching algorithm
                 if algorithm_name == "hack_2d_hist":
                     fit_rms, fit_num = match_2dhist_fit(imglist, reference_catalog,
                                          print_fit_parameters=print_fit_parameters)
                 if algorithm_name == "default":
                     fit_rms, fit_num = match_default_fit(imglist, reference_catalog,
                                                          print_fit_parameters=print_fit_parameters)
-
 
                 # update the best fit
                 if best_fit_rms >= 0.:
@@ -277,7 +274,7 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
                     best_fit_num = fit_num
                     for item in imglist:
                         item.best_meta = item.meta.copy()
-                imglist_temp = imglist.copy()
+                imglist_temp = imglist.copy() # preserve best fit solution so that it can be inserted into a reinitialized imglist next time through.
 
     # 7: Write new fit solution to input image headers
     print("-------------------- STEP 7: Update image headers with new WCS information --------------------")
@@ -290,7 +287,6 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
         # update to the meta information with the lowest rms if it is reasonable
         for item in imglist:
             item.meta = item.best_meta
-
 
     # 7: Write new fit solution to input image headers
     print("-------------------- STEP 7: Update image headers with new WCS information --------------------")
@@ -312,7 +308,7 @@ def match_default_fit(imglist, reference_catalog, print_fit_parameters=True):
     reference_catalog : Table
         Astropy Table of reference sources for this field
 
-    print_fit_parameters: bool
+    print_fit_parameters : bool
         Specify whether or not to print out FIT results for each chip
 
 
@@ -350,7 +346,7 @@ def match_2dhist_fit(imglist, reference_catalog, print_fit_parameters=True):
     reference_catalog : Table
         Astropy Table of reference sources for this field
 
-    print_fit_parameters: bool
+    print_fit_parameters : bool
         Specify whether or not to print out FIT results for each chip
 
 
@@ -386,7 +382,7 @@ def determine_fit_quality(imglist, print_fit_parameters=True):
 
     Parameters
     ----------
-    imglist: list
+    imglist : list
         output of interpret_fits. Contains sourcelist tables, newly computed WCS info, etc. for every chip of every valid
         input image.  This list should have been  updated, in-place, with the new RMS values;
         specifically,
@@ -396,6 +392,9 @@ def determine_fit_quality(imglist, print_fit_parameters=True):
             * 'NUM_FITS': number of images/group_id's with successful fits included in the TOTAL_RMS
 
         These entries are added to the 'tweakwcs_info' dictionary.
+
+    print_fit_parameters : bool
+        Specify whether or not to print out FIT results for each chip
 
     Returns
     -------
