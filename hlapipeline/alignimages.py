@@ -216,13 +216,13 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
             return(1)
     # Convert input images to tweakwcs-compatible NDData objects and
     # attach source catalogs to them.
-    imglist = []
-    for group_id, image in enumerate(processList):
-        img = amutils.build_nddata(image, group_id,
-                                   extracted_sources[image]['catalog_table'])
-        for im in img:
-            im.meta['name'] = image
-        imglist.extend(img)
+    # imglist = []
+    # for group_id, image in enumerate(processList):
+    #     img = amutils.build_nddata(image, group_id,
+    #                                extracted_sources[image]['catalog_table'])
+    #     for im in img:
+    #         im.meta['name'] = image
+    #     imglist.extend(img)
 
     # add the name of the image to the imglist object
     print("\nSUCCESS")
@@ -238,19 +238,33 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
         if len(reference_catalog) < MIN_CATALOG_THRESHOLD:
             print("Not enough sources found in catalog " + catalogList[catalogIndex])
             print("Try again with other catalog")
-            # catalogIndex += 1
-            # retry_fit = True
-            # skip_all_other_steps = True
         else:
             print("-------------------- STEP 5b: Cross matching and fitting --------------------")
             for algorithm_name in fit_algorithm_list: #loop over fit algorithm type
                 print("------------------ ------------------ ------------------ {} {} ------------------ ------------------ ------------------".format(catalogList[catalogIndex],algorithm_name))
+                # Convert input images to tweakwcs-compatible NDData objects and
+                # attach source catalogs to them.
+                imglist = []
+                for group_id, image in enumerate(processList):
+                    img = amutils.build_nddata(image, group_id,
+                                               extracted_sources[image]['catalog_table'])
+                    # add the name of the image to the imglist object
+                    for im in img:
+                        im.meta['name'] = image
+                    imglist.extend(img)
+
+                if best_fit_rms >= 0.:
+                    for item,temp_item in zip(imglist,imglist_temp):
+                        item.best_meta = temp_item.best_meta.copy()
+
                 if algorithm_name == "hack_2d_hist":
                     fit_rms, fit_num = match_2dhist_fit(imglist, reference_catalog,
                                          print_fit_parameters=print_fit_parameters)
                 if algorithm_name == "default":
                     fit_rms, fit_num = match_default_fit(imglist, reference_catalog,
                                                          print_fit_parameters=print_fit_parameters)
+
+
                 # update the best fit
                 if best_fit_rms >= 0.:
                     if fit_rms < best_fit_rms:
@@ -261,12 +275,9 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
                 else:
                     best_fit_rms = fit_rms
                     best_fit_num = fit_num
-                foo = input()
-
-
-
-
-
+                    for item in imglist:
+                        item.best_meta = item.meta.copy()
+                imglist_temp = imglist.copy()
 
     # 7: Write new fit solution to input image headers
     print("-------------------- STEP 7: Update image headers with new WCS information --------------------")
@@ -645,6 +656,7 @@ def interpret_fit_rms(tweakwcs_output, reference_catalog):
 
 if __name__ == '__main__':
     import argparse
+    import time
     PARSER = argparse.ArgumentParser(description='Align images')
     PARSER.add_argument('raw_input_list', nargs='+', help='A space-separated list of fits files to align, or a simple '
                     'text file containing a list of fits files to align, one per line')
@@ -678,4 +690,7 @@ if __name__ == '__main__':
 
     update_hdr_wcs = convert_string_tf_to_boolean(ARGS.update_hdr_wcs)
     # Get to it!
+    startTime = time.time()
     return_value = perform_align(input_list,archive,clobber,update_hdr_wcs)
+    exec_time = time.time() - startTime
+    print("\nProcessing time = {} seconds".format(exec_time))
