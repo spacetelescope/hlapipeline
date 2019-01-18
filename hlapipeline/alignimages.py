@@ -776,7 +776,9 @@ if __name__ == '__main__':
     # Get to it!
     startTime = time.time()
     return_value = perform_align(input_list,archive,clobber,update_hdr_wcs)
-    print("Processing time = {} seconds".format(time.time() - startTime))
+    exec_time = time.time() - startTime
 
     for key in return_value.keys():
         print("{}: {}".format(key,return_value[key]))
+
+    print("\nProcessing time = {} seconds".format(exec_time))
