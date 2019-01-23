@@ -611,6 +611,7 @@ def update_image_wcs_info(tweakwcs_output,imagelist):
     """
     imgctr = 0
     for item in tweakwcs_output:
+        #print('YYYYYYYYY',item.wcs.pscale)
         if item.meta['chip'] == 1:  # to get the image name straight regardless of the number of chips
             image_name = imagelist[imgctr]
             if imgctr > 0: #close previously opened image
