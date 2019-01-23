@@ -481,7 +481,11 @@ def extract_sources(img, **pars):
         src_table.rename_column('source_sum', 'flux')
         src_table.rename_column('source_sum_err', 'flux_err')
 
-    print("Total Number of detected sources: {}".format(len(src_table)))
+    if src_table is not None:
+        print("Total Number of detected sources: {}".format(len(src_table)))
+    else:
+        print("No detected sources!")
+        return None, None
 
     # Move 'id' column from first to last position
     # Makes it consistent for remainder of code
@@ -697,7 +701,8 @@ def generate_sky_catalog(image, refwcs, **kwargs):
         chip += 1
         # work with sources identified from this specific chip
         seg_tab_phot = source_cats[chip]
-
+        if seg_tab_phot is None:
+            continue
         # Convert pixel coordinates from this chip to sky coordinates
         chip_wcs = wcsutil.HSTWCS(image,ext=('sci',chip))
         seg_ra,seg_dec = chip_wcs.all_pix2world(seg_tab_phot['xcentroid'],seg_tab_phot['ycentroid'],1)

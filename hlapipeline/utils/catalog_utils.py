@@ -54,6 +54,7 @@ def randomSelectFromCSV(tableName, numEntries, seedValue):
 
     # Extract the subset rows...
     outputTable = dataTable[subset]
+    #outputTable = dataTable[0:numEntries]
 
     # Returns the outputTable which is an Astropy Table object
     return(outputTable)
