@@ -147,6 +147,12 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
     update_hdr_wcs : Boolean
         Write newly computed WCS information to image image headers?
 
+    print_fit_parameters : Boolean
+        Specify whether or not to print out FIT results for each chip.
+
+    print_git_info : Boolean
+        Display git repository information?
+
     Returns
     -------
     int value 0 if successful, int value 1 if unsuccessful
@@ -235,115 +241,91 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
             print("Not enough sources ({}) found in image {}".format(total_num_sources,imgname))
             filteredTable[index]['status'] = 1
             return(filteredTable)
-    # Convert input images to tweakwcs-compatible NDData objects and
-    # attach source catalogs to them.
-    imglist = []
-    for group_id, image in enumerate(processList):
-        img = amutils.build_nddata(image, group_id,
-                                   extracted_sources[image]['catalog_table'])
-        for im in img:
-            im.meta['name'] = image
-        imglist.extend(img)
-
-    # add the name of the image to the imglist object
     print("\nSUCCESS")
-
     currentDT = datetime.datetime.now()
     deltaDT = (currentDT - startingDT).total_seconds()
     print('Processing time of [STEP 4]: {} sec'.format(deltaDT))
     startingDT = currentDT
     # 5: Retrieve list of astrometric sources from database
-    catalogIndex = 0
-    best_fit = MAX_FIT_LIMIT
-    print("-------------------- STEP 5: Detect Gaia astrometric sources --------------------")
-    print("Astrometric Catalog: ",catalogList[catalogIndex])
-    reference_catalog = generate_astrometric_catalog(processList, catalog=catalogList[catalogIndex])
 
-    best_fit_rms = MAX_FIT_RMS
-    if len(reference_catalog) < MIN_CATALOG_THRESHOLD:
-        print("Not enough sources found in Gaia catalog " + catalogList[catalogIndex])
-        print("Try again with other catalog")
-        catalogIndex += 1
-        retry_fit = True
-        skip_all_other_steps = True
-    else:
+    best_fit_rms = -99999.0
+    fit_algorithm_list= [match_2dhist_fit,match_default_fit]
+    for catalogIndex in range(0, len(catalogList)): #loop over astrometric catalog
+        print("-------------------- STEP 5: Detect astrometric sources --------------------")
+        print("Astrometric Catalog: ",catalogList[catalogIndex])
+        reference_catalog = generate_astrometric_catalog(processList, catalog=catalogList[catalogIndex])
 
-        currentDT = datetime.datetime.now()
-        deltaDT = (currentDT - startingDT).total_seconds()
-        print('Processing time of [STEP 5]: {} sec'.format(deltaDT))
-        startingDT = currentDT
-        print("-------------------- STEP 5b: Cross matching and fitting --------------------")
-        best_fit_rms, best_fit_num = match_2dhist_fit(imglist, reference_catalog,
-                                     print_fit_parameters=print_fit_parameters)
+        if len(reference_catalog) < MIN_CATALOG_THRESHOLD:
+            print("Not enough sources found in catalog " + catalogList[catalogIndex])
+            if catalogIndex < len(catalogList) -1:
+                print("Try again with other catalog")
+            else:
+                print("ERROR! No astrometric sources found in any catalog. Exiting...") #bail out if not enough sources can be found any of the astrometric catalogs
+                return (1)
+        else:
+            print("-------------------- STEP 5b: Cross matching and fitting --------------------")
+            for algorithm_name in fit_algorithm_list: #loop over fit algorithm type
+                print("------------------ ------------------ ------------------ {} {} ------------------ ------------------ ------------------".format(catalogList[catalogIndex],algorithm_name.__name__))
+                # Convert input images to tweakwcs-compatible NDData objects and
+                # attach source catalogs to them.
+                imglist = []
+                for group_id, image in enumerate(processList):
+                    img = amutils.build_nddata(image, group_id,
+                                               extracted_sources[image]['catalog_table'])
+                    # add the name of the image to the imglist object
+                    for im in img:
+                        im.meta['name'] = image
+                    imglist.extend(img)
 
-        info_keys = OrderedDict(imglist[0].meta['tweakwcs_info']).keys()
-        # Update filtered table with number of matched sources and other information
-        for item in imglist:
-            imgname = item.meta['name']
-            index = np.where(filteredTable['imageName']==imgname)[0][0]
+                #copy in best-fit solution to newly initialized imglist
+                if best_fit_rms >= 0.:
+                    for item,temp_item in zip(imglist,imglist_temp):
+                        item.best_meta = temp_item.best_meta.copy()
 
-            if item.meta['tweakwcs_info']['status'].startswith("FAILED") != True:
-                for tweakwcs_info_key in info_keys:
-                    if not tweakwcs_info_key.startswith("matched"):
-                        if tweakwcs_info_key.lower() == 'rms':
-                            filteredTable[index]['rms_x'] = item.meta['tweakwcs_info'][tweakwcs_info_key][0]
-                            filteredTable[index]['rms_y'] = item.meta['tweakwcs_info'][tweakwcs_info_key][1]
+                #execute the correct fitting/matching algorithm
+                fit_rms, fit_num = algorithm_name(imglist, reference_catalog, print_fit_parameters=print_fit_parameters)
+                # update the best fit
+                if best_fit_rms >= 0.:
+                    if fit_rms < best_fit_rms:
+                        best_fit_rms = fit_rms
+                        best_fit_num = fit_num
+                        for item in imglist:
+                            item.best_meta = item.meta.copy()
+                else:
+                    best_fit_rms = fit_rms
+                    best_fit_num = fit_num
+                    for item in imglist:
+                        item.best_meta = item.meta.copy()
+                imglist_temp = imglist.copy() # preserve best fit solution so that it can be inserted into a reinitialized imglist next time through.
 
-                filteredTable[index]['catalog'] = item.meta['tweakwcs_info']['catalog']
-                filteredTable[index]['catalogSources'] = len(reference_catalog)
-                filteredTable[index]['matchSources'] = item.meta['tweakwcs_info']['nmatches']
-                filteredTable[index]['rms_ra'] = item.meta['tweakwcs_info']['RMS_RA'].value
-                filteredTable[index]['rms_dec'] = item.meta['tweakwcs_info']['RMS_DEC'].value
-                filteredTable[index]['fit_rms'] = item.meta['tweakwcs_info']['FIT_RMS']
-                filteredTable[index]['total_rms'] = item.meta['tweakwcs_info']['TOTAL_RMS']
-                #filteredTable.pprint(max_width=-1)
+    info_keys = OrderedDict(imglist[0].meta['tweakwcs_info']).keys()
+    # Update filtered table with number of matched sources and other information
+    for item in imglist:
+        imgname = item.meta['name']
+        index = np.where(filteredTable['imageName'] == imgname)[0][0]
 
-        # 6b: If available, the logic tree for fitting with different algorithms
-        # would be here.   These would only be invoked if the above step failed.
-        # At this time, only one algorithm is being used and there are not
-        # currently other cases to run on the images and so this is empty.   This
-        # section might be a good area to create as a function if this will be repeated
-        # with other catalogs.
+        if item.meta['tweakwcs_info']['status'].startswith("FAILED") != True:
+            for tweakwcs_info_key in info_keys:
+                if not tweakwcs_info_key.startswith("matched"):
+                    if tweakwcs_info_key.lower() == 'rms':
+                        filteredTable[index]['rms_x'] = item.meta['tweakwcs_info'][tweakwcs_info_key][0]
+                        filteredTable[index]['rms_y'] = item.meta['tweakwcs_info'][tweakwcs_info_key][1]
 
+            filteredTable[index]['catalog'] = item.meta['tweakwcs_info']['catalog']
+            filteredTable[index]['catalogSources'] = len(reference_catalog)
+            filteredTable[index]['matchSources'] = item.meta['tweakwcs_info']['nmatches']
+            filteredTable[index]['rms_ra'] = item.meta['tweakwcs_info']['RMS_RA'].value
+            filteredTable[index]['rms_dec'] = item.meta['tweakwcs_info']['RMS_DEC'].value
+            filteredTable[index]['fit_rms'] = item.meta['tweakwcs_info']['FIT_RMS']
+            filteredTable[index]['total_rms'] = item.meta['tweakwcs_info']['TOTAL_RMS']
+            filteredTable.pprint(max_width=-1)
 
     currentDT = datetime.datetime.now()
     deltaDT = (currentDT - startingDT).total_seconds()
     print('Processing time of [STEP 5b]: {} sec'.format(deltaDT))
     startingDT = currentDT
-    # 8: If available, try the fitting with different catalogs
-    if best_fit_rms >= MAX_FIT_RMS:
-        for catalogIndex in range(1, len(catalogList)):
-            print("-------------------- STEP 6: Detect catalog astrometric sources --------------------")
-            print("Astrometric Catalog: ",catalogList[catalogIndex])
-            reference_catalog = generate_astrometric_catalog(processList, catalog=catalogList[catalogIndex])
-
-            currentDT = datetime.datetime.now()
-            deltaDT = (currentDT - startingDT).total_seconds()
-            print('Processing time of [STEP 6]: {} sec'.format(deltaDT))
-            startingDT = currentDT
-
-            if len(reference_catalog) < MIN_CATALOG_THRESHOLD:
-                print("Not enough sources found in catalog " + catalogList[catalogIndex])
-                print("Try again with other catalog")
-                catalogIndex += 1
-                retry_fit = True
-                skip_all_other_steps = True
-            else:
-                print("-------------------- STEP 6b: Cross matching and fitting --------------------")
-                fit_rms, fit_num = match_default_fit(imglist, reference_catalog,
-                                     print_fit_parameters=print_fit_parameters)
-                # update the best fit
-                if fit_rms < best_fit_rms:
-                   best_fit_rms = fit_rms
-                   best_fit_num = fit_num
-                   for item in imglist:
-                       item.best_meta = item.meta.copy()
-
-                currentDT = datetime.datetime.now()
-                deltaDT = (currentDT - startingDT).total_seconds()
-                print('Processing time of [STEP 6b]: {} sec'.format(deltaDT))
-                startingDT = currentDT
-
+    # 7: Write new fit solution to input image headers
+    print("-------------------- STEP 7: Update image headers with new WCS information --------------------")
     if best_fit_rms < MAX_FIT_RMS:
        print("The fitting process was successful with a best fit total rms of {} mas".format(best_fit_rms))
     else:
@@ -381,7 +363,7 @@ def match_default_fit(imglist, reference_catalog, print_fit_parameters=True):
     reference_catalog : Table
         Astropy Table of reference sources for this field
 
-    print_fit_parameters: bool
+    print_fit_parameters : bool
         Specify whether or not to print out FIT results for each chip
 
 
@@ -419,7 +401,7 @@ def match_2dhist_fit(imglist, reference_catalog, print_fit_parameters=True):
     reference_catalog : Table
         Astropy Table of reference sources for this field
 
-    print_fit_parameters: bool
+    print_fit_parameters : bool
         Specify whether or not to print out FIT results for each chip
 
 
@@ -455,7 +437,7 @@ def determine_fit_quality(imglist, print_fit_parameters=True):
 
     Parameters
     ----------
-    imglist: list
+    imglist : list
         output of interpret_fits. Contains sourcelist tables, newly computed WCS info, etc. for every chip of every valid
         input image.  This list should have been  updated, in-place, with the new RMS values;
         specifically,
@@ -465,6 +447,9 @@ def determine_fit_quality(imglist, print_fit_parameters=True):
             * 'NUM_FITS': number of images/group_id's with successful fits included in the TOTAL_RMS
 
         These entries are added to the 'tweakwcs_info' dictionary.
+
+    print_fit_parameters : bool
+        Specify whether or not to print out FIT results for each chip
 
     Returns
     -------
