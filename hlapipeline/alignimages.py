@@ -233,7 +233,11 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
 
         if len(reference_catalog) < MIN_CATALOG_THRESHOLD:
             print("Not enough sources found in catalog " + catalogList[catalogIndex])
-            print("Try again with other catalog")
+            if catalogIndex < len(catalogList) -1:
+                print("Try again with other catalog")
+            else:
+                print("ERROR! No astrometric sources found in any catalog. Exiting...") #bail out if not enough sources can be found any of the astrometric catalogs
+                return (1)
         else:
             print("-------------------- STEP 5b: Cross matching and fitting --------------------")
             for algorithm_name in fit_algorithm_list: #loop over fit algorithm type
