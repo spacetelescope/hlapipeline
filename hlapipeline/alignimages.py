@@ -225,7 +225,7 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
     # 5: Retrieve list of astrometric sources from database
 
     best_fit_rms = -99999.0
-    fit_algorithm_list= ['hack_2d_hist','default']
+    fit_algorithm_list= [match_2dhist_fit,match_default_fit]
     for catalogIndex in range(0, len(catalogList)): #loop over astrometric catalog
         print("-------------------- STEP 5: Detect astrometric sources --------------------")
         print("Astrometric Catalog: ",catalogList[catalogIndex])
@@ -237,7 +237,7 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
         else:
             print("-------------------- STEP 5b: Cross matching and fitting --------------------")
             for algorithm_name in fit_algorithm_list: #loop over fit algorithm type
-                print("------------------ ------------------ ------------------ {} {} ------------------ ------------------ ------------------".format(catalogList[catalogIndex],algorithm_name))
+                print("------------------ ------------------ ------------------ {} {} ------------------ ------------------ ------------------".format(catalogList[catalogIndex],algorithm_name.__name__))
                 # Convert input images to tweakwcs-compatible NDData objects and
                 # attach source catalogs to them.
                 imglist = []
@@ -255,12 +255,7 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
                         item.best_meta = temp_item.best_meta.copy()
 
                 #execute the correct fitting/matching algorithm
-                if algorithm_name == "hack_2d_hist":
-                    fit_rms, fit_num = match_2dhist_fit(imglist, reference_catalog,
-                                         print_fit_parameters=print_fit_parameters)
-                if algorithm_name == "default":
-                    fit_rms, fit_num = match_default_fit(imglist, reference_catalog,
-                                                         print_fit_parameters=print_fit_parameters)
+                fit_rms, fit_num = algorithm_name(imglist, reference_catalog, print_fit_parameters=print_fit_parameters)
 
                 # update the best fit
                 if best_fit_rms >= 0.:
