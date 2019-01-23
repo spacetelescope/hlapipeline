@@ -4,6 +4,7 @@
 
 """
 
+import datetime
 from astropy.io import fits
 from astropy.table import Table
 from astropy.coordinates import SkyCoord, Angle
@@ -174,31 +175,45 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
 
     # 1: Interpret input data and optional parameters
     print("-------------------- STEP 1: Get data --------------------")
+    startingDT = datetime.datetime.now()
+    print(str(startingDT))
     imglist = check_and_get_data(input_list, archive=archive, clobber=clobber)
     print("\nSUCCESS")
 
+    currentDT = datetime.datetime.now()
+    deltaDT = (currentDT - startingDT).total_seconds()
+    print('Processing time of [STEP 1]: {} sec'.format(deltaDT))
+    startingDT = currentDT
     # 2: Apply filter to input observations to insure that they meet minimum criteria for being able to be aligned
     print("-------------------- STEP 2: Filter data --------------------")
     filteredTable = filter.analyze_data(imglist)
 
     # Check the table to determine if there is any viable data to be aligned.  The
     # 'doProcess' column (bool) indicates the image/file should or should not be used
-    # for alignment purposes.
+    # for alignment purposes.  For filtered data, 'doProcess=0' and 'status=9999' in the table.
     if filteredTable['doProcess'].sum() == 0:
         print("No viable images in filtered table - no processing done.\n")
-        return(1)
+        return(filteredTable)
 
     # Get the list of all "good" files to use for the alignment
     processList = filteredTable['imageName'][np.where(filteredTable['doProcess'])]
     processList = list(processList) #Convert processList from numpy list to regular python list
     print("\nSUCCESS")
 
+    currentDT = datetime.datetime.now()
+    deltaDT = (currentDT - startingDT).total_seconds()
+    print('Processing time of [STEP 2]: {} sec'.format(deltaDT))
+    startingDT = currentDT
     # 3: Build WCS for full set of input observations
     print("-------------------- STEP 3: Build WCS --------------------")
     refwcs = amutils.build_reference_wcs(processList)
     print("\nSUCCESS")
 
 
+    currentDT = datetime.datetime.now()
+    deltaDT = (currentDT - startingDT).total_seconds()
+    print('Processing time of [STEP 3]: {} sec'.format(deltaDT))
+    startingDT = currentDT
     # 4: Extract catalog of observable sources from each input image
     print("-------------------- STEP 4: Source finding --------------------")
     extracted_sources = generate_source_catalogs(processList,
@@ -211,9 +226,15 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
         total_num_sources = 0
         for chipnum in table.keys():
             total_num_sources += len(table[chipnum])
+
+        # Update filtered table with number of found sources
+        index = np.where(filteredTable['imageName']==imgname)[0][0]
+        filteredTable[index]['foundSources'] = total_num_sources
+
         if total_num_sources < MIN_OBSERVABLE_THRESHOLD:
             print("Not enough sources ({}) found in image {}".format(total_num_sources,imgname))
-            return(1)
+            filteredTable[index]['status'] = 1
+            return(filteredTable)
     # Convert input images to tweakwcs-compatible NDData objects and
     # attach source catalogs to them.
     imglist = []
@@ -227,6 +248,10 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
     # add the name of the image to the imglist object
     print("\nSUCCESS")
 
+    currentDT = datetime.datetime.now()
+    deltaDT = (currentDT - startingDT).total_seconds()
+    print('Processing time of [STEP 4]: {} sec'.format(deltaDT))
+    startingDT = currentDT
     # 5: Retrieve list of astrometric sources from database
     catalogIndex = 0
     best_fit = MAX_FIT_LIMIT
@@ -234,6 +259,7 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
     print("Astrometric Catalog: ",catalogList[catalogIndex])
     reference_catalog = generate_astrometric_catalog(processList, catalog=catalogList[catalogIndex])
 
+    best_fit_rms = MAX_FIT_RMS
     if len(reference_catalog) < MIN_CATALOG_THRESHOLD:
         print("Not enough sources found in Gaia catalog " + catalogList[catalogIndex])
         print("Try again with other catalog")
@@ -241,9 +267,36 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
         retry_fit = True
         skip_all_other_steps = True
     else:
+
+        currentDT = datetime.datetime.now()
+        deltaDT = (currentDT - startingDT).total_seconds()
+        print('Processing time of [STEP 5]: {} sec'.format(deltaDT))
+        startingDT = currentDT
         print("-------------------- STEP 5b: Cross matching and fitting --------------------")
         best_fit_rms, best_fit_num = match_2dhist_fit(imglist, reference_catalog,
                                      print_fit_parameters=print_fit_parameters)
+
+        info_keys = OrderedDict(imglist[0].meta['tweakwcs_info']).keys()
+        # Update filtered table with number of matched sources and other information
+        for item in imglist:
+            imgname = item.meta['name']
+            index = np.where(filteredTable['imageName']==imgname)[0][0]
+
+            if item.meta['tweakwcs_info']['status'].startswith("FAILED") != True:
+                for tweakwcs_info_key in info_keys:
+                    if not tweakwcs_info_key.startswith("matched"):
+                        if tweakwcs_info_key.lower() == 'rms':
+                            filteredTable[index]['rms_x'] = item.meta['tweakwcs_info'][tweakwcs_info_key][0]
+                            filteredTable[index]['rms_y'] = item.meta['tweakwcs_info'][tweakwcs_info_key][1]
+
+                filteredTable[index]['catalog'] = item.meta['tweakwcs_info']['catalog']
+                filteredTable[index]['catalogSources'] = len(reference_catalog)
+                filteredTable[index]['matchSources'] = item.meta['tweakwcs_info']['nmatches']
+                filteredTable[index]['rms_ra'] = item.meta['tweakwcs_info']['RMS_RA'].value
+                filteredTable[index]['rms_dec'] = item.meta['tweakwcs_info']['RMS_DEC'].value
+                filteredTable[index]['fit_rms'] = item.meta['tweakwcs_info']['FIT_RMS']
+                filteredTable[index]['total_rms'] = item.meta['tweakwcs_info']['TOTAL_RMS']
+                #filteredTable.pprint(max_width=-1)
 
         # 6b: If available, the logic tree for fitting with different algorithms
         # would be here.   These would only be invoked if the above step failed.
@@ -253,12 +306,21 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
         # with other catalogs.
 
 
+    currentDT = datetime.datetime.now()
+    deltaDT = (currentDT - startingDT).total_seconds()
+    print('Processing time of [STEP 5b]: {} sec'.format(deltaDT))
+    startingDT = currentDT
     # 8: If available, try the fitting with different catalogs
-    if best_fit_rms > MAX_FIT_RMS:
+    if best_fit_rms >= MAX_FIT_RMS:
         for catalogIndex in range(1, len(catalogList)):
             print("-------------------- STEP 6: Detect catalog astrometric sources --------------------")
             print("Astrometric Catalog: ",catalogList[catalogIndex])
             reference_catalog = generate_astrometric_catalog(processList, catalog=catalogList[catalogIndex])
+
+            currentDT = datetime.datetime.now()
+            deltaDT = (currentDT - startingDT).total_seconds()
+            print('Processing time of [STEP 6]: {} sec'.format(deltaDT))
+            startingDT = currentDT
 
             if len(reference_catalog) < MIN_CATALOG_THRESHOLD:
                 print("Not enough sources found in catalog " + catalogList[catalogIndex])
@@ -268,7 +330,6 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
                 skip_all_other_steps = True
             else:
                 print("-------------------- STEP 6b: Cross matching and fitting --------------------")
-
                 fit_rms, fit_num = match_default_fit(imglist, reference_catalog,
                                      print_fit_parameters=print_fit_parameters)
                 # update the best fit
@@ -278,8 +339,11 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
                    for item in imglist:
                        item.best_meta = item.meta.copy()
 
-    # 7: Write new fit solution to input image headers
-    print("-------------------- STEP 7: Update image headers with new WCS information --------------------")
+                currentDT = datetime.datetime.now()
+                deltaDT = (currentDT - startingDT).total_seconds()
+                print('Processing time of [STEP 6b]: {} sec'.format(deltaDT))
+                startingDT = currentDT
+
     if best_fit_rms < MAX_FIT_RMS:
        print("The fitting process was successful with a best fit total rms of {} mas".format(best_fit_rms))
     else:
@@ -298,7 +362,13 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
         print("\nSUCCESS")
     else:
         print("\n STEP SKIPPED")
-    return (0)
+
+    currentDT = datetime.datetime.now()
+    deltaDT = (currentDT - startingDT).total_seconds()
+    print('Processing time of [STEP 7]: {} sec'.format(deltaDT))
+    startingDT = currentDT
+    filteredTable['status'][:] = 0
+    return (filteredTable)
 
 def match_default_fit(imglist, reference_catalog, print_fit_parameters=True):
     """Perform cross-matching and final fit using 2dHistogram matching
@@ -556,6 +626,7 @@ def update_image_wcs_info(tweakwcs_output,imagelist):
     """
     imgctr = 0
     for item in tweakwcs_output:
+        #print('YYYYYYYYY',item.wcs.pscale)
         if item.meta['chip'] == 1:  # to get the image name straight regardless of the number of chips
             image_name = imagelist[imgctr]
             if imgctr > 0: #close previously opened image
