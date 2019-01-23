@@ -99,18 +99,11 @@ def analyze_data(inputFileList, **kwargs):
     total_rms = -1.0
     datasetKey = -1.0
 
-    namesArray = ('imageName', 'instrument', 'detector', 'filter', 'aperture', 'obstype', 
-<<<<<<< HEAD
+    namesArray = ('imageName', 'instrument', 'detector', 'filter', 'aperture', 'obstype',
             'subarray', 'dateObs', 'mjdutc', 'doProcess', 'processMsg', 'catalog', 'foundSources',
             'catalogSources','matchSources', 'rms_x', 'rms_y', 'rms_ra', 'rms_dec', 'completed',
             'fit_rms', 'total_rms', 'datasetKey', 'status', 'headerletFile')
     dataType = ('S20', 'S20', 'S20', 'S20', 'S20', 'S20', 'b', 'S20', 'f8', 'b', 'S20',
-=======
-            'subarray', 'dateObs', 'mjdutc', 'doProcess', 'processMsg', 'catalog', 'foundSources', 
-            'catalogSources','matchSources', 'rms_x', 'rms_y', 'rms_ra', 'rms_dec', 'completed',
-            'fit_rms', 'total_rms', 'datasetKey', 'status', 'headerletFile')
-    dataType = ('S20', 'S20', 'S20', 'S20', 'S20', 'S20', 'b', 'S20', 'f8', 'b', 'S20', 
->>>>>>> master
             'S20', 'i4', 'i4', 'i4', 'f8', 'f8', 'f8', 'f8', 'b', 'f8', 'f8', 'i8', 'i4', 'S30')
 
     # Create an astropy table
@@ -246,16 +239,10 @@ def analyze_data(inputFileList, **kwargs):
             generate_msg(inputFile, msgType, noProcKey, noProcValue)
 
         # Populate a row of the table
-        outputTable.add_row([inputFile, instrume, detector, sfilter, aperture, obstype, 
-<<<<<<< HEAD
-                             subarray, dateObs, mjdutc, doProcess, processMsg, catalog,
-                             foundSources, catalogSources, matchSources, rms_x, rms_y,
-                             rms_ra, rms_dec, completed, fit_rms, total_rms, datasetKey,
-=======
+        outputTable.add_row([inputFile, instrume, detector, sfilter, aperture, obstype,
                              subarray, dateObs, mjdutc, doProcess, processMsg, catalog, 
                              foundSources, catalogSources, matchSources, rms_x, rms_y, 
-                             rms_ra, rms_dec, completed, fit_rms, total_rms, datasetKey, 
->>>>>>> master
+                             rms_ra, rms_dec, completed, fit_rms, total_rms, datasetKey,
                              status, headerletFile])
     #outputTable.pprint(max_width=-1)
 
