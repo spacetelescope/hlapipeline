@@ -632,7 +632,10 @@ def update_image_wcs_info(tweakwcs_output,imagelist):
                 wcsName = "FIT_{}".format(item.meta['catalog_name'])
             else:
                 wname = hdulist['sci', 1].header['wcsname']
-                wcsName = '{}-FIT_{}'.format(wname[:wname.index('-')], item.meta['tweakwcs_info']['catalog'])
+                if "-" in wname:
+                    wcsName = '{}-FIT_{}'.format(wname[:wname.index('-')], item.meta['tweakwcs_info']['catalog'])
+                else:
+                    wcsName = '{}-FIT_{}'.format(wname, item.meta['tweakwcs_info']['catalog'])
 
             sciExtDict = {}
             for sciExtCtr in range(1, amutils.countExtn(hdulist) + 1): #establish correct mapping to the science extensions
