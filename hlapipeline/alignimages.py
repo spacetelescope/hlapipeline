@@ -631,7 +631,8 @@ def update_image_wcs_info(tweakwcs_output,imagelist):
             if not hdulist['SCI',1].header['WCSNAME'] or hdulist['SCI',1].header['WCSNAME'] =="": #Just in case header value 'wcsname' is empty.
                 wcsName = "FIT_{}".format(item.meta['catalog_name'])
             else:
-                wcsName = "{}-FIT_{}".format(hdulist['SCI',1].header['WCSNAME'],item.meta['tweakwcs_info']['catalog'])
+                wname = hdulist['sci', 1].header['wcsname']
+                wcsName = '{}-FIT_{}'.format(wname[:wname.index('-')], item.meta['tweakwcs_info']['catalog'])
 
             sciExtDict = {}
             for sciExtCtr in range(1, amutils.countExtn(hdulist) + 1): #establish correct mapping to the science extensions
@@ -649,9 +650,9 @@ def update_image_wcs_info(tweakwcs_output,imagelist):
     # TODO: Second of two calls to Michele's update headerlet subroutine goes here!
 
     if imageName.endswith("flc.fits"):
-        headerlet_filename = imageName.replace("flc", "hlet")
+        headerlet_filename = imageName.replace("flc", "flt_hlet")
     if imageName.endswith("flt.fits"):
-        headerlet_filename = imageName.replace("flt", "hlet")
+        headerlet_filename = imageName.replace("flt", "flt_hlet")
     out_headerlet.writeto(headerlet_filename,clobber=True)
     print("Wrote headerlet file {}.\n\n".format(headerlet_filename))
     out_headerlet_list.append(headerlet_filename)
