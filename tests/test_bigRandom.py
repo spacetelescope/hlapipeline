@@ -46,13 +46,12 @@ class TestRandomAlignMosaic(BaseHLATest):
             selected fields (aka datasets) from a input ascii file (CSV)
             using the new algorithms developed for producing the HLA products.
         """
-        #inputListFiles = ['ACSList50R_v2.csv', 'WFC3List50R_v2.csv']
-        #inputListFiles = ['ran2_ACSimages_v2_4.csv', 'ran2_WFC3images_v2_4.csv']
-        inputListFiles = ['ACSList2.csv']
+        inputListFiles = ['ACSList50R_v2.csv', 'WFC3List50R_v2.csv']
+        #inputListFiles = ['ACSList2.csv']
 
         # Desired number of random entries for testing from each input CSV
-        #inputNumEntries = 75
-        inputNumEntries = 3
+        inputNumEntries = 50
+        #inputNumEntries = 3
 
         # Seed for random number generator
         inputSeedValue = 1
@@ -133,6 +132,12 @@ class TestRandomAlignMosaic(BaseHLATest):
                     # This is in case an image was filtered out (e.g., expotime = 0)
                     index = np.where(datasetTable['doProcess']==1)[0]
                     sumOfStatus = datasetTable['status'][index].sum()
+
+                    # Update the table with the datasetKey which is really just a counter
+                    datasetTable['datasetKey'][:] = datasetKey
+                    datasetTable['completed'][:] = True
+                    datasetTable.write(outputName, format='ascii.ecsv')
+                    datasetTable.pprint(max_width=-1)
    
                     # Successful datasets
                     if (sumOfStatus == 0):
@@ -142,13 +147,8 @@ class TestRandomAlignMosaic(BaseHLATest):
                     else:
                         print("TEST_RANDOM. Unsuccessful Dataset: ", dataset, "\n")
 
-                # Update the table with the datasetKey which is really just a counter
-                datasetTable['datasetKey'][:] = datasetKey
-                datasetTable['completed'][:] = True
+                # Append the latest dataset table to the summary table 
                 allDatasetTable = vstack([allDatasetTable, datasetTable])
-
-                datasetTable.write(outputName, format='ascii.ecsv')
-                datasetTable.pprint(max_width=-1)
 
                 # Perform some clean up
                 if os.path.exists('ref_cat.ecsv'): os.remove('ref_cat.ecsv')

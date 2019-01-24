@@ -196,10 +196,10 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
 
     # Check the table to determine if there is any viable data to be aligned.  The
     # 'doProcess' column (bool) indicates the image/file should or should not be used
-    # for alignment purposes.  For filtered data, 'doProcess=0' and 'status=9999' in the table.
+    # for alignment purposes.  For filtered data, 'doProcess=0' and 'status=9999' in the table 
+    # (the status value by default), so there is no need to update the filteredTable here.
     if filteredTable['doProcess'].sum() == 0:
         print("No viable images in filtered table - no processing done.\n")
-        filteredTable[index]['status'] = 1
         return(filteredTable)
 
     # Get the list of all "good" files to use for the alignment
@@ -256,13 +256,18 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
         print("Astrometric Catalog: ",catalogList[catalogIndex])
         reference_catalog = generate_astrometric_catalog(processList, catalog=catalogList[catalogIndex])
 
+        currentDT = datetime.datetime.now()
+        deltaDT = (currentDT - startingDT).total_seconds()
+        print('Processing time of [STEP 5]: {} sec'.format(deltaDT))
+        startingDT = currentDT
         if len(reference_catalog) < MIN_CATALOG_THRESHOLD:
             print("Not enough sources found in catalog " + catalogList[catalogIndex])
             if catalogIndex < len(catalogList) -1:
                 print("Try again with other catalog")
             else:
                 print("ERROR! No astrometric sources found in any catalog. Exiting...") #bail out if not enough sources can be found any of the astrometric catalogs
-                return (1)
+                filteredTable['status'][:] = 1
+                return (filteredTable)
         else:
             print("-------------------- STEP 5b: Cross matching and fitting --------------------")
             for algorithm_name in fit_algorithm_list: #loop over fit algorithm type
@@ -303,8 +308,8 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
     deltaDT = (currentDT - startingDT).total_seconds()
     print('Processing time of [STEP 5b]: {} sec'.format(deltaDT))
     startingDT = currentDT
-    # 7: Write new fit solution to input image headers
-    print("-------------------- STEP 7: Update image headers with new WCS information --------------------")
+    # 6: Populate the filteredTable
+    print("-------------------- STEP 6: Collect up information and populate the filtered table --------------------")
     if best_fit_rms > 0 and best_fit_rms < MAX_FIT_RMS:
         print("The fitting process was successful with a best fit total rms of {} mas".format(best_fit_rms))
     else:
@@ -336,8 +341,12 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
             filteredTable[index]['rms_dec'] = item.meta['tweakwcs_info']['RMS_DEC'].value
             filteredTable[index]['fit_rms'] = item.meta['tweakwcs_info']['FIT_RMS']
             filteredTable[index]['total_rms'] = item.meta['tweakwcs_info']['TOTAL_RMS']
-            filteredTable.pprint(max_width=-1)
+            #filteredTable.pprint(max_width=-1)
 
+    currentDT = datetime.datetime.now()
+    deltaDT = (currentDT - startingDT).total_seconds()
+    print('Processing time of [STEP 6]: {} sec'.format(deltaDT))
+    startingDT = currentDT
     # 7: Write new fit solution to input image headers
     print("-------------------- STEP 7: Update image headers with new WCS information --------------------")
     if best_fit_rms > 0 and update_hdr_wcs:
@@ -414,7 +423,7 @@ def match_2dhist_fit(imglist, reference_catalog, print_fit_parameters=True):
         Number of sources used to generate visit level FIT and `fit_rms`
 
     """
-    print("-------------------- STEP 5b: Cross matching and fitting --------------------")
+    print("-------------------- STEP 5b: (match_2dhist_fit) Cross matching and fitting --------------------")
     # Specify matching algorithm to use
     match = tweakwcs.TPMatch(searchrad=75, separation=0.1,
                              tolerance=2.0, use2dhist=True)
