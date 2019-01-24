@@ -81,20 +81,30 @@ def analyze_data(inputFileList, **kwargs):
     catalogSources = 0 # Number of astrometric catalog sources determined based upon coordinate overlap with image WCS
     foundSources = 0   # Number of sources detected in images
     matchSources = 0   # Number of sources cross matched between astrometric catalog and detected in image
-    rms_x = -1
-    rms_y = -1
-    chisq_x = -1
-    chisq_y = -1
-    isSuccess = False
+    rms_x = -1.0
+    rms_y = -1.0
+    rms_ra = -1.0
+    rms_dec = -1.0
+    chisq_x = -1.0
+    chisq_y = -1.0
+    completed = False # If true, there was no exception and the processing completed all logic
     dateObs = None     # Human readable date
     mjdutc = -1.0      # MJD UTC start of exposure
     fgslock = None
     processMsg = None
+    status = 9999
+    headerletFile = None
 
-    namesArray = ('imageName', 'instrument', 'detector', 'filter', 'aperture', 'obstype', 
-            'subarray', 'dateObs', 'mjdutc', 'doProcess', 'processMsg', 'catalog', '# found sources', '# catalog sources', 
-            '# match sources', 'rms_x', 'rms_y', 'chisq_x', 'chisq_y', 'isSuccess')
-    dataType = ('S20', 'S20', 'S20', 'S20', 'S20', 'S20', 'b', 'S20', 'f8', 'b', 'S20', 'S20', 'i4', 'i4', 'i4', 'f8', 'f8', 'f8', 'f8', 'b')
+    fit_rms = -1.0
+    total_rms = -1.0
+    datasetKey = -1.0
+
+    namesArray = ('imageName', 'instrument', 'detector', 'filter', 'aperture', 'obstype',
+            'subarray', 'dateObs', 'mjdutc', 'doProcess', 'processMsg', 'catalog', 'foundSources',
+            'catalogSources','matchSources', 'rms_x', 'rms_y', 'rms_ra', 'rms_dec', 'completed',
+            'fit_rms', 'total_rms', 'datasetKey', 'status', 'headerletFile')
+    dataType = ('S20', 'S20', 'S20', 'S20', 'S20', 'S20', 'b', 'S20', 'f8', 'b', 'S20',
+            'S20', 'i4', 'i4', 'i4', 'f8', 'f8', 'f8', 'f8', 'b', 'f8', 'f8', 'i8', 'i4', 'S30')
 
     # Create an astropy table
     outputTable = Table(names=namesArray,dtype=dataType)
@@ -229,10 +239,12 @@ def analyze_data(inputFileList, **kwargs):
             generate_msg(inputFile, msgType, noProcKey, noProcValue)
 
         # Populate a row of the table
-        outputTable.add_row([inputFile, instrume, detector, sfilter, aperture, obstype, 
-                             subarray, dateObs, mjdutc, doProcess, processMsg, catalog, foundSources, catalogSources, matchSources, 
-                             rms_x, rms_y, chisq_x, chisq_y, isSuccess])
-    outputTable.pprint(max_width=-1)
+        outputTable.add_row([inputFile, instrume, detector, sfilter, aperture, obstype,
+                             subarray, dateObs, mjdutc, doProcess, processMsg, catalog, 
+                             foundSources, catalogSources, matchSources, rms_x, rms_y, 
+                             rms_ra, rms_dec, completed, fit_rms, total_rms, datasetKey,
+                             status, headerletFile])
+    #outputTable.pprint(max_width=-1)
 
     return(outputTable)
 
