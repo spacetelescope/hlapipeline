@@ -617,7 +617,7 @@ def update_image_wcs_info(tweakwcs_output,imagelist):
                 # Create headerlet
                 out_headerlet = headerlet.create_headerlet(imageName, hdrname=wcsName, wcsname=wcsName)
 
-                # TODO: First of two calls to Michele's update headerlet subroutine goes here!
+                update_headerlet_phdu(item, out_headerlet)
 
                 if imageName.endswith("flc.fits"):
                     headerlet_filename = imageName.replace("flc", "flt_hlet")
@@ -650,17 +650,62 @@ def update_image_wcs_info(tweakwcs_output,imagelist):
     out_image_list.append(imageName)
     out_headerlet = headerlet.create_headerlet(imageName, hdrname=wcsName, wcsname=wcsName)
 
-    # TODO: Second of two calls to Michele's update headerlet subroutine goes here!
+    update_headerlet_phdu(item, out_headerlet)
 
     if imageName.endswith("flc.fits"):
-        headerlet_filename = imageName.replace("flc", "flt_hlet")
+        headerlet_filename = imageName.replace("flc", "flt_hlet2")
     if imageName.endswith("flt.fits"):
-        headerlet_filename = imageName.replace("flt", "flt_hlet")
+        headerlet_filename = imageName.replace("flt", "flt_hlet2")
     out_headerlet.writeto(headerlet_filename,clobber=True)
     print("Wrote headerlet file {}.\n\n".format(headerlet_filename))
     out_headerlet_list.append(headerlet_filename)
     return(out_image_list,out_headerlet_list)
 
+# ======================================================================================================================
+def update_headerlet_phdu(tweakwcs_item, headerlet):
+    """Update the primary header data unit keywords of a headerlet object in-place
+
+    Parameters
+    ==========
+    tweakwc_item :
+        Basically the output from tweakwcs which contains the cross match and fit
+        information for every chip of every valid input image.
+
+    headerlet :
+        object containing WCS information
+    """
+
+    # Get the data to be used as values for FITS keywords
+    rms_ra = tweakwcs_item.meta['tweakwcs_info']['RMS_RA'].value
+    rms_dec = tweakwcs_item.meta['tweakwcs_info']['RMS_DEC'].value
+    fit_rms = tweakwcs_item.meta['tweakwcs_info']['FIT_RMS']
+    nmatch = tweakwcs_item.meta['tweakwcs_info']['nmatches']
+    catalog = tweakwcs_item.meta['tweakwcs_info']['catalog']
+
+    x_shift = (tweakwcs_item.meta['tweakwcs_info']['shift'])[0]
+    y_shift = (tweakwcs_item.meta['tweakwcs_info']['shift'])[1]
+    rot = tweakwcs_item.meta['tweakwcs_info']['rot']
+    scale = tweakwcs_item.meta['tweakwcs_info']['scale'][0]
+    skew = tweakwcs_item.meta['tweakwcs_info']['skew']
+
+    # Update the existing FITS keywords
+    primary_header = headerlet[0].header
+    primary_header['RMS_RA'] = rms_ra
+    primary_header['RMS_DEC'] = rms_dec
+    primary_header['NMATCH'] = nmatch
+    primary_header['CATALOG'] = catalog
+
+    # Create a new FITS keyword
+    primary_header['FIT_RMS'] = (fit_rms, 'RMS of the 2D fit of the headerlet solution')
+
+    # Create the set of HISTORY keywords
+    primary_header['HISTORY'] = '~~~~~ FIT PARAMETERS ~~~~~'
+    primary_header['HISTORY'] = '{:>15} : {:9.4f} "/pixels'.format('platescale', tweakwcs_item.wcs.pscale)
+    primary_header['HISTORY'] = '{:>15} : {:9.4f} pixels'.format('x_shift', x_shift)
+    primary_header['HISTORY'] = '{:>15} : {:9.4f} pixels'.format('y_shift', y_shift)
+    primary_header['HISTORY'] = '{:>15} : {:9.4f} degrees'.format('rotation', rot)
+    primary_header['HISTORY'] = '{:>15} : {:9.4f}'.format('scale', scale)
+    primary_header['HISTORY'] = '{:>15} : {:9.4f}'.format('skew', skew)
 # ======================================================================================================================
 
 def interpret_fit_rms(tweakwcs_output, reference_catalog):
