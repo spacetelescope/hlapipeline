@@ -112,6 +112,7 @@ def check_and_get_data(input_list,**pars):
 
 # ----------------------------------------------------------------------------------------------------------------------
 
+
 def convert_string_tf_to_boolean(invalue):
     """Converts string 'True' or 'False' value to Boolean True or Boolean False.
 
@@ -364,6 +365,10 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
     startingDT = currentDT
     return (filteredTable)
 
+
+# ----------------------------------------------------------------------------------------------------------------------
+
+
 def match_default_fit(imglist, reference_catalog, print_fit_parameters=True):
     """Perform cross-matching and final fit using 2dHistogram matching
 
@@ -400,6 +405,9 @@ def match_default_fit(imglist, reference_catalog, print_fit_parameters=True):
     fit_rms, fit_num  = determine_fit_quality(imglist, print_fit_parameters=print_fit_parameters)
 
     return fit_rms, fit_num
+
+
+# ----------------------------------------------------------------------------------------------------------------------
 
 
 def match_2dhist_fit(imglist, reference_catalog, print_fit_parameters=True):
@@ -443,6 +451,10 @@ def match_2dhist_fit(imglist, reference_catalog, print_fit_parameters=True):
         item.best_meta = item.meta.copy()
 
     return fit_rms, fit_num
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+
 
 def determine_fit_quality(imglist, print_fit_parameters=True):
     """Determine the quality of the fit to the data
@@ -508,6 +520,8 @@ def determine_fit_quality(imglist, print_fit_parameters=True):
         print("Fit calculations successful.")
 
     return max_rms_val, num_xmatches
+
+
 # ----------------------------------------------------------------------------------------------------------------------
 
 
@@ -684,7 +698,10 @@ def update_image_wcs_info(tweakwcs_output,imagelist):
     out_headerlet_dict[imageName] = headerlet_filename
     return(out_headerlet_dict)
 
-# ======================================================================================================================
+
+# ----------------------------------------------------------------------------------------------------------------------
+
+
 def update_headerlet_phdu(tweakwcs_item, headerlet):
     """Update the primary header data unit keywords of a headerlet object in-place
 
@@ -729,7 +746,10 @@ def update_headerlet_phdu(tweakwcs_item, headerlet):
     primary_header['HISTORY'] = '{:>15} : {:9.4f} degrees'.format('rotation', rot)
     primary_header['HISTORY'] = '{:>15} : {:9.4f}'.format('scale', scale)
     primary_header['HISTORY'] = '{:>15} : {:9.4f}'.format('skew', skew)
-# ======================================================================================================================
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+
 
 def interpret_fit_rms(tweakwcs_output, reference_catalog):
     """Interpret the FIT information to convert RMS to physical units
@@ -805,7 +825,7 @@ def interpret_fit_rms(tweakwcs_output, reference_catalog):
         item.meta['tweakwcs_info']['catalog'] = reference_catalog.meta['catalog']
 
 
-# ======================================================================================================================
+# ----------------------------------------------------------------------------------------------------------------------
 
 
 if __name__ == '__main__':
