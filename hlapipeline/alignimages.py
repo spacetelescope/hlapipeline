@@ -653,9 +653,9 @@ def update_image_wcs_info(tweakwcs_output,imagelist):
     update_headerlet_phdu(item, out_headerlet)
 
     if imageName.endswith("flc.fits"):
-        headerlet_filename = imageName.replace("flc", "flt_hlet2")
+        headerlet_filename = imageName.replace("flc", "flt_hlet")
     if imageName.endswith("flt.fits"):
-        headerlet_filename = imageName.replace("flt", "flt_hlet2")
+        headerlet_filename = imageName.replace("flt", "flt_hlet")
     out_headerlet.writeto(headerlet_filename,clobber=True)
     print("Wrote headerlet file {}.\n\n".format(headerlet_filename))
     out_headerlet_list.append(headerlet_filename)
