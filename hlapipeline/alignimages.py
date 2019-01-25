@@ -17,6 +17,7 @@ import numpy as np
 import os
 import pdb
 from stsci.tools import fileutil
+from stwcs.wcsutil import headerlet
 from stwcs.wcsutil import HSTWCS
 import sys
 import tweakwcs
@@ -110,6 +111,7 @@ def check_and_get_data(input_list,**pars):
 
 
 # ----------------------------------------------------------------------------------------------------------------------
+
 
 def convert_string_tf_to_boolean(invalue):
     """Converts string 'True' or 'False' value to Boolean True or Boolean False.
@@ -350,7 +352,9 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
     # 7: Write new fit solution to input image headers
     print("-------------------- STEP 7: Update image headers with new WCS information --------------------")
     if best_fit_rms > 0 and update_hdr_wcs:
-        update_image_wcs_info(imglist, processList)
+        headerlet_dict = update_image_wcs_info(imglist)
+        for tableIndex in range(0,len(filteredTable)):
+            filteredTable[tableIndex]['headerletFile'] = headerlet_dict[filteredTable[tableIndex]['imageName']]
         print("\nSUCCESS")
     else:
         print("\n STEP SKIPPED")
@@ -360,6 +364,10 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
     print('Processing time of [STEP 7]: {} sec'.format(deltaDT))
     print('TOTAL Processing time of {} sec'.format((currentDT- zeroDT).total_seconds()))
     return (filteredTable)
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+
 
 def match_default_fit(imglist, reference_catalog, print_fit_parameters=True):
     """Perform cross-matching and final fit using 2dHistogram matching
@@ -399,6 +407,9 @@ def match_default_fit(imglist, reference_catalog, print_fit_parameters=True):
     return fit_rms, fit_num
 
 
+# ----------------------------------------------------------------------------------------------------------------------
+
+
 def match_2dhist_fit(imglist, reference_catalog, print_fit_parameters=True):
     """Perform cross-matching and final fit using 2dHistogram matching
 
@@ -436,6 +447,10 @@ def match_2dhist_fit(imglist, reference_catalog, print_fit_parameters=True):
     fit_rms, fit_num  = determine_fit_quality(imglist, print_fit_parameters=print_fit_parameters)
 
     return fit_rms, fit_num
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+
 
 def determine_fit_quality(imglist, print_fit_parameters=True):
     """Determine the quality of the fit to the data
@@ -501,6 +516,8 @@ def determine_fit_quality(imglist, print_fit_parameters=True):
         print("Fit calculations successful.")
 
     return max_rms_val, num_xmatches
+
+
 # ----------------------------------------------------------------------------------------------------------------------
 
 
@@ -598,44 +615,121 @@ def generate_source_catalogs(imglist, **pars):
 # ----------------------------------------------------------------------------------------------------------------------
 
 
-def update_image_wcs_info(tweakwcs_output,imagelist):
-    """Write newly computed WCS information to image headers
+def update_image_wcs_info(tweakwcs_output):
+    """Write newly computed WCS information to image headers and write headerlet files
+
+        Parameters
+        ----------
+        tweakwcs_output : list
+            output of tweakwcs. Contains sourcelist tables, newly computed WCS info, etc. for every chip of every valid
+            input image.
+
+        Returns
+        -------
+        out_headerlet_list : dictionary
+            a dictionary of the headerlet files created by this subroutine, keyed by flt/flc fits filename.
+        """
+    out_headerlet_dict = {}
+    for item in tweakwcs_output:
+        imageName = item.meta['filename']
+        chipnum = item.meta['chip']
+        if chipnum == 1:
+            chipctr = 1
+            hdulist = fits.open(imageName, mode='update')
+            num_sci_ext = amutils.countExtn(hdulist)
+
+            # generate wcs name for updated image header, headerlet
+            if not hdulist['SCI',1].header['WCSNAME'] or hdulist['SCI',1].header['WCSNAME'] =="": #Just in case header value 'wcsname' is empty.
+                wcsName = "FIT_{}".format(item.meta['catalog_name'])
+            else:
+                wname = hdulist['sci', 1].header['wcsname']
+                if "-" in wname:
+                    wcsName = '{}-FIT_{}'.format(wname[:wname.index('-')], item.meta['tweakwcs_info']['catalog'])
+                else:
+                    wcsName = '{}-FIT_{}'.format(wname, item.meta['tweakwcs_info']['catalog'])
+
+            # establish correct mapping to the science extensions
+            sciExtDict = {}
+            for sciExtCtr in range(1, num_sci_ext + 1):
+                sciExtDict["{}".format(sciExtCtr)] = fileutil.findExtname(hdulist,'sci',extver=sciExtCtr)
+
+        # update header with new WCS info
+        updatehdr.update_wcs(hdulist, sciExtDict["{}".format(item.meta['chip'])], item.wcs, wcsname=wcsName,
+                                 reusename=True, verbose=True)
+        if chipctr == num_sci_ext:
+            # Close updated flc.fits or flt.fits file
+            print("CLOSE {}\n".format(imageName))  # TODO: Remove before deployment
+            hdulist.flush()
+            hdulist.close()
+
+            # Create headerlet
+            out_headerlet = headerlet.create_headerlet(imageName, hdrname=wcsName, wcsname=wcsName)
+
+            # Update headerlet
+            update_headerlet_phdu(item, out_headerlet)
+
+            # Write headerlet
+            if imageName.endswith("flc.fits"):
+                headerlet_filename = imageName.replace("flc", "flt_hlet")
+            if imageName.endswith("flt.fits"):
+                headerlet_filename = imageName.replace("flt", "flt_hlet")
+            out_headerlet.writeto(headerlet_filename, clobber=True)
+            print("Wrote headerlet file {}.\n\n".format(headerlet_filename))
+            out_headerlet_dict[imageName] = headerlet_filename
+
+        chipctr +=1
+    return (out_headerlet_dict)
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+def update_headerlet_phdu(tweakwcs_item, headerlet):
+    """Update the primary header data unit keywords of a headerlet object in-place
 
     Parameters
-    ----------
-    tweakwcs_output : list
-        output of tweakwcs. Contains sourcelist tables, newly computed WCS info, etc. for every chip of every valid
-        input image.
+    ==========
+    tweakwc_item :
+        Basically the output from tweakwcs which contains the cross match and fit
+        information for every chip of every valid input image.
 
-    imagelist : list
-        list of valid processed images to be updated
-
-    Returns
-    -------
-    Nothing!
+    headerlet :
+        object containing WCS information
     """
-    imgctr = 0
-    for item in tweakwcs_output:
-        #print('YYYYYYYYY',item.wcs.pscale)
-        if item.meta['chip'] == 1:  # to get the image name straight regardless of the number of chips
-            image_name = imagelist[imgctr]
-            if imgctr > 0: #close previously opened image
-                print("CLOSE {}".format(hdulist[0].header['FILENAME'])) #TODO: Remove before deployment
-                hdulist.flush()
-                hdulist.close()
-            hdulist = fits.open(image_name, mode='update')
-            sciExtDict = {}
-            for sciExtCtr in range(1, amutils.countExtn(hdulist) + 1): #establish correct mapping to the science extensions
-                sciExtDict["{}".format(sciExtCtr)] = fileutil.findExtname(hdulist,'sci',extver=sciExtCtr)
-            imgctr += 1
-        updatehdr.update_wcs(hdulist, sciExtDict["{}".format(item.meta['chip'])], item.wcs, wcsname='TWEAKDEV', reusename=True, verbose=True) #TODO: May want to settle on a better name for 'wcsname'
-        print()
-    print("CLOSE {}".format(hdulist[0].header['FILENAME'])) #TODO: Remove before deployment
-    hdulist.flush() #close last image
-    hdulist.close()
+
+    # Get the data to be used as values for FITS keywords
+    rms_ra = tweakwcs_item.meta['tweakwcs_info']['RMS_RA'].value
+    rms_dec = tweakwcs_item.meta['tweakwcs_info']['RMS_DEC'].value
+    fit_rms = tweakwcs_item.meta['tweakwcs_info']['FIT_RMS']
+    nmatch = tweakwcs_item.meta['tweakwcs_info']['nmatches']
+    catalog = tweakwcs_item.meta['tweakwcs_info']['catalog']
+
+    x_shift = (tweakwcs_item.meta['tweakwcs_info']['shift'])[0]
+    y_shift = (tweakwcs_item.meta['tweakwcs_info']['shift'])[1]
+    rot = tweakwcs_item.meta['tweakwcs_info']['rot']
+    scale = tweakwcs_item.meta['tweakwcs_info']['scale'][0]
+    skew = tweakwcs_item.meta['tweakwcs_info']['skew']
+
+    # Update the existing FITS keywords
+    primary_header = headerlet[0].header
+    primary_header['RMS_RA'] = rms_ra
+    primary_header['RMS_DEC'] = rms_dec
+    primary_header['NMATCH'] = nmatch
+    primary_header['CATALOG'] = catalog
+
+    # Create a new FITS keyword
+    primary_header['FIT_RMS'] = (fit_rms, 'RMS (mas) of the 2D fit of the headerlet solution')
+
+    # Create the set of HISTORY keywords
+    primary_header['HISTORY'] = '~~~~~ FIT PARAMETERS ~~~~~'
+    primary_header['HISTORY'] = '{:>15} : {:9.4f} "/pixels'.format('platescale', tweakwcs_item.wcs.pscale)
+    primary_header['HISTORY'] = '{:>15} : {:9.4f} pixels'.format('x_shift', x_shift)
+    primary_header['HISTORY'] = '{:>15} : {:9.4f} pixels'.format('y_shift', y_shift)
+    primary_header['HISTORY'] = '{:>15} : {:9.4f} degrees'.format('rotation', rot)
+    primary_header['HISTORY'] = '{:>15} : {:9.4f}'.format('scale', scale)
+    primary_header['HISTORY'] = '{:>15} : {:9.4f}'.format('skew', skew)
 
 
-# ======================================================================================================================
+# ----------------------------------------------------------------------------------------------------------------------
+
 
 def interpret_fit_rms(tweakwcs_output, reference_catalog):
     """Interpret the FIT information to convert RMS to physical units
@@ -711,7 +805,7 @@ def interpret_fit_rms(tweakwcs_output, reference_catalog):
         item.meta['tweakwcs_info']['catalog'] = reference_catalog.meta['catalog']
 
 
-# ======================================================================================================================
+# ----------------------------------------------------------------------------------------------------------------------
 
 
 if __name__ == '__main__':
@@ -728,8 +822,8 @@ if __name__ == '__main__':
                     'overwrite existing local copies of input files? Unless explicitly set, the default is "False".')
 
     PARSER.add_argument( '-u', '--update_hdr_wcs', required=False,choices=['True','False'],default='False',help='Write '
-                    'newly computed WCS information to image image headers? Unless explicitly set, the default is '
-                    '"False".')
+                    'newly computed WCS information to image image headers and create headerlet files? Unless explicitly '
+                    'set, the default is "False".')
     ARGS = PARSER.parse_args()
 
     # Build list of input images
@@ -748,5 +842,7 @@ if __name__ == '__main__':
     clobber = convert_string_tf_to_boolean(ARGS.clobber)
 
     update_hdr_wcs = convert_string_tf_to_boolean(ARGS.update_hdr_wcs)
+
     # Get to it!
     return_value = perform_align(input_list,archive,clobber,update_hdr_wcs)
+    print(return_value)
