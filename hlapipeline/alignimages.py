@@ -352,7 +352,7 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
     # 7: Write new fit solution to input image headers
     print("-------------------- STEP 7: Update image headers with new WCS information --------------------")
     if best_fit_rms > 0 and update_hdr_wcs:
-        headerlet_dict = update_image_wcs_info(imglist, processList)
+        headerlet_dict = update_image_wcs_info(imglist)
         for tableIndex in range(0,len(filteredTable)):
             filteredTable[tableIndex]['headerletFile'] = headerlet_dict[filteredTable[tableIndex]['imageName']]
         print("\nSUCCESS")
@@ -619,50 +619,30 @@ def generate_source_catalogs(imglist, **pars):
 # ----------------------------------------------------------------------------------------------------------------------
 
 
-def update_image_wcs_info(tweakwcs_output,imagelist):
+def update_image_wcs_info(tweakwcs_output):
     """Write newly computed WCS information to image headers and write headerlet files
 
-    Parameters
-    ----------
-    tweakwcs_output : list
-        output of tweakwcs. Contains sourcelist tables, newly computed WCS info, etc. for every chip of every valid
-        input image.
+        Parameters
+        ----------
+        tweakwcs_output : list
+            output of tweakwcs. Contains sourcelist tables, newly computed WCS info, etc. for every chip of every valid
+            input image.
 
-    imagelist : list
-        list of valid processed images to be updated
-
-    Returns
-    -------
-    out_headerlet_list : dictionary
-        a dictionary of the headerlet files created by this subroutine, keyed by flt/flc fits filename.
-    """
+        Returns
+        -------
+        out_headerlet_list : dictionary
+            a dictionary of the headerlet files created by this subroutine, keyed by flt/flc fits filename.
+        """
     out_headerlet_dict = {}
-    imgctr = 0
     for item in tweakwcs_output:
-        #print('YYYYYYYYY',item.wcs.pscale)
-        if item.meta['chip'] == 1:  # to get the image name straight regardless of the number of chips
-            image_name = imagelist[imgctr]
-            if imgctr > 0: #close previously opened image
-                imageName = hdulist[0].header['FILENAME']
-                print("CLOSE {}\n".format(imageName)) #TODO: Remove before deployment
-                hdulist.flush()
-                hdulist.close()
+        imageName = item.meta['filename']
+        chipnum = item.meta['chip']
+        if chipnum == 1:
+            chipctr = 1
+            hdulist = fits.open(imageName, mode='update')
+            num_sci_ext = amutils.countExtn(hdulist)
 
-                # Create headerlet
-                out_headerlet = headerlet.create_headerlet(imageName, hdrname=wcsName, wcsname=wcsName)
-
-                # Update headerlet
-                update_headerlet_phdu(item, out_headerlet)
-
-                if imageName.endswith("flc.fits"):
-                    headerlet_filename = imageName.replace("flc", "flt_hlet")
-                if imageName.endswith("flt.fits"):
-                    headerlet_filename = imageName.replace("flt", "flt_hlet")
-                out_headerlet.writeto(headerlet_filename,clobber=True)
-                print("Wrote headerlet file {}.\n\n".format(headerlet_filename))
-                out_headerlet_dict[imageName] = headerlet_filename
-            hdulist = fits.open(image_name, mode='update')
-            #generate wcs name for updated image header, headerlet
+            # generate wcs name for updated image header, headerlet
             if not hdulist['SCI',1].header['WCSNAME'] or hdulist['SCI',1].header['WCSNAME'] =="": #Just in case header value 'wcsname' is empty.
                 wcsName = "FIT_{}".format(item.meta['catalog_name'])
             else:
@@ -672,36 +652,40 @@ def update_image_wcs_info(tweakwcs_output,imagelist):
                 else:
                     wcsName = '{}-FIT_{}'.format(wname, item.meta['tweakwcs_info']['catalog'])
 
+            # establish correct mapping to the science extensions
             sciExtDict = {}
-            for sciExtCtr in range(1, amutils.countExtn(hdulist) + 1): #establish correct mapping to the science extensions
+            for sciExtCtr in range(1, num_sci_ext + 1):
                 sciExtDict["{}".format(sciExtCtr)] = fileutil.findExtname(hdulist,'sci',extver=sciExtCtr)
-            imgctr += 1
-        updatehdr.update_wcs(hdulist, sciExtDict["{}".format(item.meta['chip'])], item.wcs, wcsname=wcsName, reusename=True, verbose=True)
-        print()
-    imageName = hdulist[0].header['FILENAME']
-    print("CLOSE {}\n".format(imageName)) #TODO: Remove before deployment
-    hdulist.flush() #close last image
-    hdulist.close()
 
-    # Create headerlet
-    out_headerlet = headerlet.create_headerlet(imageName, hdrname=wcsName, wcsname=wcsName)
+        # update header with new WCS info
+        updatehdr.update_wcs(hdulist, sciExtDict["{}".format(item.meta['chip'])], item.wcs, wcsname=wcsName,
+                                 reusename=True, verbose=True)
+        if chipctr == num_sci_ext:
+            # Close updated flc.fits or flt.fits file
+            print("CLOSE {}\n".format(imageName))  # TODO: Remove before deployment
+            hdulist.flush()
+            hdulist.close()
 
-    # Update headerlet
-    update_headerlet_phdu(item, out_headerlet)
+            # Create headerlet
+            out_headerlet = headerlet.create_headerlet(imageName, hdrname=wcsName, wcsname=wcsName)
 
-    if imageName.endswith("flc.fits"):
-        headerlet_filename = imageName.replace("flc", "flt_hlet")
-    if imageName.endswith("flt.fits"):
-        headerlet_filename = imageName.replace("flt", "flt_hlet")
-    out_headerlet.writeto(headerlet_filename,clobber=True)
-    print("Wrote headerlet file {}.\n\n".format(headerlet_filename))
-    out_headerlet_dict[imageName] = headerlet_filename
-    return(out_headerlet_dict)
+            # Update headerlet
+            update_headerlet_phdu(item, out_headerlet)
+
+            # Write headerlet
+            if imageName.endswith("flc.fits"):
+                headerlet_filename = imageName.replace("flc", "flt_hlet")
+            if imageName.endswith("flt.fits"):
+                headerlet_filename = imageName.replace("flt", "flt_hlet")
+            out_headerlet.writeto(headerlet_filename, clobber=True)
+            print("Wrote headerlet file {}.\n\n".format(headerlet_filename))
+            out_headerlet_dict[imageName] = headerlet_filename
+
+        chipctr +=1
+    return (out_headerlet_dict)
 
 
 # ----------------------------------------------------------------------------------------------------------------------
-
-
 def update_headerlet_phdu(tweakwcs_item, headerlet):
     """Update the primary header data unit keywords of a headerlet object in-place
 
@@ -736,7 +720,7 @@ def update_headerlet_phdu(tweakwcs_item, headerlet):
     primary_header['CATALOG'] = catalog
 
     # Create a new FITS keyword
-    primary_header['FIT_RMS'] = (fit_rms, 'RMS of the 2D fit of the headerlet solution')
+    primary_header['FIT_RMS'] = (fit_rms, 'RMS (mas) of the 2D fit of the headerlet solution')
 
     # Create the set of HISTORY keywords
     primary_header['HISTORY'] = '~~~~~ FIT PARAMETERS ~~~~~'
