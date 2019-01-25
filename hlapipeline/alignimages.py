@@ -181,7 +181,7 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
 
     # 1: Interpret input data and optional parameters
     print("-------------------- STEP 1: Get data --------------------")
-    startingDT = datetime.datetime.now()
+    zeroDT = startingDT = datetime.datetime.now()
     print(str(startingDT))
     imglist = check_and_get_data(input_list, archive=archive, clobber=clobber)
     print("\nSUCCESS")
@@ -196,7 +196,7 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
 
     # Check the table to determine if there is any viable data to be aligned.  The
     # 'doProcess' column (bool) indicates the image/file should or should not be used
-    # for alignment purposes.  For filtered data, 'doProcess=0' and 'status=9999' in the table 
+    # for alignment purposes.  For filtered data, 'doProcess=0' and 'status=9999' in the table
     # (the status value by default), so there is no need to update the filteredTable here.
     if filteredTable['doProcess'].sum() == 0:
         print("No viable images in filtered table - no processing done.\n")
@@ -249,6 +249,17 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
     startingDT = currentDT
     # 5: Retrieve list of astrometric sources from database
 
+    # Convert input images to tweakwcs-compatible NDData objects and
+    # attach source catalogs to them.
+    imglist = []
+    for group_id, image in enumerate(processList):
+        img = amutils.build_nddata(image, group_id,
+                                   extracted_sources[image]['catalog_table'])
+        # add the name of the image to the imglist object
+        for im in img:
+            im.meta['name'] = image
+        imglist.extend(img)
+
     best_fit_rms = -99999.0
     fit_algorithm_list= [match_2dhist_fit,match_default_fit]
     for catalogIndex in range(0, len(catalogList)): #loop over astrometric catalog
@@ -260,6 +271,7 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
         deltaDT = (currentDT - startingDT).total_seconds()
         print('Processing time of [STEP 5]: {} sec'.format(deltaDT))
         startingDT = currentDT
+
         if len(reference_catalog) < MIN_CATALOG_THRESHOLD:
             print("Not enough sources found in catalog " + catalogList[catalogIndex])
             if catalogIndex < len(catalogList) -1:
@@ -271,25 +283,11 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
         else:
             print("-------------------- STEP 5b: Cross matching and fitting --------------------")
             for algorithm_name in fit_algorithm_list: #loop over fit algorithm type
-                print("------------------ ------------------ ------------------ {} {} ------------------ ------------------ ------------------".format(catalogList[catalogIndex],algorithm_name.__name__))
-                # Convert input images to tweakwcs-compatible NDData objects and
-                # attach source catalogs to them.
-                imglist = []
-                for group_id, image in enumerate(processList):
-                    img = amutils.build_nddata(image, group_id,
-                                               extracted_sources[image]['catalog_table'])
-                    # add the name of the image to the imglist object
-                    for im in img:
-                        im.meta['name'] = image
-                    imglist.extend(img)
-
-                #copy in best-fit solution to newly initialized imglist
-                if best_fit_rms >= 0.:
-                    for item,temp_item in zip(imglist,imglist_temp):
-                        item.best_meta = temp_item.best_meta.copy()
+                print("------------------ Catalog {} matched using {} ------------------ ".format(catalogList[catalogIndex],algorithm_name.__name__))
 
                 #execute the correct fitting/matching algorithm
                 fit_rms, fit_num = algorithm_name(imglist, reference_catalog, print_fit_parameters=print_fit_parameters)
+
                 # update the best fit
                 if best_fit_rms >= 0.:
                     if fit_rms < best_fit_rms:
@@ -298,11 +296,13 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
                         for item in imglist:
                             item.best_meta = item.meta.copy()
                 else:
-                    best_fit_rms = fit_rms
-                    best_fit_num = fit_num
-                    for item in imglist:
-                        item.best_meta = item.meta.copy()
-                imglist_temp = imglist.copy() # preserve best fit solution so that it can be inserted into a reinitialized imglist next time through.
+                    if fit_rms < MAX_FIT_LIMIT:
+                        best_fit_rms = fit_rms
+                        best_fit_num = fit_num
+                        for item in imglist:
+                            item.best_meta = item.meta.copy()
+                #imglist_temp = imglist.copy() # preserve best fit solution so that it can be inserted into a reinitialized imglist next time through.
+
 
     currentDT = datetime.datetime.now()
     deltaDT = (currentDT - startingDT).total_seconds()
@@ -318,7 +318,7 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
     if best_fit_rms > 0 and best_fit_rms < MAX_FIT_LIMIT:
         # update to the meta information with the lowest rms if it is reasonable
         for item in imglist:
-            item.meta = item.best_meta
+            item.meta = item.best_meta.copy()
         filteredTable['status'][:] = 0
 
     info_keys = OrderedDict(imglist[0].meta['tweakwcs_info']).keys()
@@ -358,7 +358,7 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
     currentDT = datetime.datetime.now()
     deltaDT = (currentDT - startingDT).total_seconds()
     print('Processing time of [STEP 7]: {} sec'.format(deltaDT))
-    startingDT = currentDT
+    print('TOTAL Processing time of {} sec'.format((currentDT- zeroDT).total_seconds()))
     return (filteredTable)
 
 def match_default_fit(imglist, reference_catalog, print_fit_parameters=True):
@@ -434,10 +434,6 @@ def match_2dhist_fit(imglist, reference_catalog, print_fit_parameters=True):
 
     # determine the quality of the fit
     fit_rms, fit_num  = determine_fit_quality(imglist, print_fit_parameters=print_fit_parameters)
-
-    #Initialize best fit results in imglist metadata
-    for item in imglist:
-        item.best_meta = item.meta.copy()
 
     return fit_rms, fit_num
 
