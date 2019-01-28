@@ -263,6 +263,7 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
         imglist.extend(img)
 
     best_fit_rms = -99999.0
+    best_fitStatusDict={}
     fit_algorithm_list= [match_2dhist_fit,match_default_fit]
     for catalogIndex in range(0, len(catalogList)): #loop over astrometric catalog
         print("-------------------- STEP 5: Detect astrometric sources --------------------")
@@ -291,7 +292,7 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
                 imglist = algorithm_name(imglist, reference_catalog)
 
                 # determine the quality of the fit
-                fit_rms, fit_num = determine_fit_quality(imglist, print_fit_parameters=print_fit_parameters)
+                fit_rms, fit_num, fitStatusDict = determine_fit_quality(imglist, print_fit_parameters=print_fit_parameters)
 
                 # update the best fit
                 if best_fit_rms >= 0.:
@@ -300,12 +301,14 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
                         best_fit_num = fit_num
                         for item in imglist:
                             item.best_meta = item.meta.copy()
+                        best_fitStatusDict = fitStatusDict
                 else:
                     if fit_rms < MAX_FIT_LIMIT:
                         best_fit_rms = fit_rms
                         best_fit_num = fit_num
                         for item in imglist:
                             item.best_meta = item.meta.copy()
+                        best_fitStatusDict = fitStatusDict
                 #imglist_temp = imglist.copy() # preserve best fit solution so that it can be inserted into a reinitialized imglist next time through.
 
 
@@ -464,13 +467,21 @@ def determine_fit_quality(imglist, print_fit_parameters=True):
     num_xmatches: int
         The number of stars used in matching the data
 
+    fitStatusDict : dictionary # TODO: Correct details!
+        Dictionary containing the status of the fit solution computed for each chip of each image in imglist. The
+        dictionary is keyed by imagename and chip in the follow syntax, all run together as one string:
+        <imagename>,<chipnum>
+
     """
     tweakwcs_info_keys = OrderedDict(imglist[0].meta['tweakwcs_info']).keys()
     max_rms_val = 1e9
     num_xmatches = 0
-
+    fitStatusDict={}
+    xshifts=[]
+    yshifts=[]
     for item in imglist:
         image_name = item.meta['name']
+        chip_num = item.meta['chip']
         #Handle fitting failures (no matches found)
         if item.meta['tweakwcs_info']['status'].startswith("FAILED") == True:
                 print("No cross matches found in any catalog for {} - no processing done.".format(image_name))
@@ -482,6 +493,54 @@ def determine_fit_quality(imglist, print_fit_parameters=True):
             if catalogIndex < numCatalogs-1:
                 print("Not enough cross matches found between astrometric catalog and sources found in {}".format(image_name))
                 continue
+
+        # Build fitStatusDict entry
+        dictKey = "{},{}".format(image_name, chip_num)
+        fitStatusDict[dictKey] = {'valid': False,
+                                  'max_rms': max_rms_val,
+                                  'num_matches': num_xmatches,
+                                  'compromised': False,
+                                  'reason': ""} # Initialize dictionary entry for current image/chip
+        nmatchesCheck = False
+        if num_xmatches > 4:
+            nmatchesCheck = True
+
+        radialOffsetCheck = False
+        radialOffset = math.sqrt(float(item.meta['tweakwcs_info']['shift'][0])**2+float(item.meta['tweakwcs_info']['shift'][0])**2)/item.wcs.pscale #radial offset in arssec
+        if float(num_xmatches) * 0.36 > 0.8 + (radialOffset/10.0)**8:
+            radialOffsetCheck = True
+
+        largeRmsCheck = False
+        if fit_rms_val/item.wcs.pscale < 1.0:
+            largeRmsCheck = True
+
+        fitRmsCheck = False
+        if fit_rms_val < max_rms_val:
+            fitRmsCheck = True
+
+        xshifts.append(item.meta['tweakwcs_info']['shift'][0])
+        yshifts.append(item.meta['tweakwcs_info']['shift'][1])
+
+        if nmatchesCheck == True and radialOffsetCheck == True and largeRmsCheck == True:
+            fitStatusDict[dictKey]['valid'] = True
+            fitStatusDict[dictKey]['compromised'] = False
+            fitStatusDict[dictKey]['reason'] = "FIT SUCCESSFUL"
+
+        if nmatchesCheck == True and radialOffsetCheck == True and largeRmsCheck == False:
+            fitStatusDict[dictKey]['valid'] = False
+            fitStatusDict[dictKey]['compromised'] = True
+            fitStatusDict[dictKey]['reason'] = "Fit RMS value > 1 pixel"
+
+        elif nmatchesCheck == False and radialOffsetCheck == True:
+            fitStatusDict[dictKey]['valid'] = True
+            fitStatusDict[dictKey]['compromised'] = True
+            fitStatusDict[dictKey]['reason'] = "Too few crossmatched sources"
+        else:
+            fitStatusDict[dictKey]['valid'] = False
+            fitStatusDict[dictKey]['compromised'] = True
+            fitStatusDict[dictKey]['reason'] = "FIT UNSUCCESSFUL"
+
+
         print('RESULTS FOR {} Chip {}: FIT_RMS = {} mas, TOTAL_RMS = {} mas, NUM =  {}'.format(image_name, item.meta['chip'], fit_rms_val, max_rms_val, num_xmatches))
         # print fit params to screen
         if print_fit_parameters:
@@ -493,14 +552,24 @@ def determine_fit_quality(imglist, print_fit_parameters=True):
                 if not tweakwcs_info_key.startswith("matched"):
                     print("{} : {}".format(tweakwcs_info_key,item.meta['tweakwcs_info'][tweakwcs_info_key]))
             print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+        print("nmatchesCheck: {} radialOffsetCheck: {} largeRmsCheck: {} fitRmsCheck: {}".format(nmatchesCheck,radialOffsetCheck,largeRmsCheck,fitRmsCheck))
+    if (math.sqrt(np.std(np.asarray(xshifts)* 2) + np.std(np.asarray(xshifts)* 2)) <= imglist[0].meta['tweakwcs_info']['TOTAL_RMS']) / (imglist[0].wcs.pscale):
+        for dictKey in fitStatusDict:
+            fitStatusDict[dictKey]['valid'] = False
+            fitStatusDict[dictKey]['compromised'] = True
+            fitStatusDict[dictKey]['reason'] = "Consistency violation!"
 
+    print(math.sqrt(np.std(np.asarray(xshifts) * 2) + np.std(np.asarray(xshifts) * 2)))
+    print((imglist[0].meta['tweakwcs_info']['TOTAL_RMS']) / (imglist[0].wcs.pscale))
+
+
+    for item in imglist: print(fitStatusDict["{},{}".format(item.meta['name'], item.meta['chip'])])
     if max_rms_val > MAX_FIT_RMS:
         print("Total fit RMS value = {} mas greater than the maximum threshold value {}.".format(max_rms_val, MAX_FIT_RMS))
         print("Try again with the next catalog")
     else:
         print("Fit calculations successful.")
-
-    return max_rms_val, num_xmatches
+    return max_rms_val, num_xmatches, fitStatusDict
 
 
 # ----------------------------------------------------------------------------------------------------------------------
