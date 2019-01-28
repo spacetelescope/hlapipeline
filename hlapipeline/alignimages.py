@@ -845,4 +845,5 @@ if __name__ == '__main__':
 
     # Get to it!
     return_value = perform_align(input_list,archive,clobber,update_hdr_wcs)
+    
     print(return_value)
