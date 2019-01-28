@@ -288,7 +288,10 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
                 print("------------------ Catalog {} matched using {} ------------------ ".format(catalogList[catalogIndex],algorithm_name.__name__))
 
                 #execute the correct fitting/matching algorithm
-                fit_rms, fit_num = algorithm_name(imglist, reference_catalog, print_fit_parameters=print_fit_parameters)
+                imglist = algorithm_name(imglist, reference_catalog)
+
+                # determine the quality of the fit
+                fit_rms, fit_num = determine_fit_quality(imglist, print_fit_parameters=print_fit_parameters)
 
                 # update the best fit
                 if best_fit_rms >= 0.:
@@ -369,7 +372,7 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
 # ----------------------------------------------------------------------------------------------------------------------
 
 
-def match_default_fit(imglist, reference_catalog, print_fit_parameters=True):
+def match_default_fit(imglist, reference_catalog):
     """Perform cross-matching and final fit using 2dHistogram matching
 
     Parameters
@@ -380,17 +383,10 @@ def match_default_fit(imglist, reference_catalog, print_fit_parameters=True):
     reference_catalog : Table
         Astropy Table of reference sources for this field
 
-    print_fit_parameters : bool
-        Specify whether or not to print out FIT results for each chip
-
-
     Returns
     --------
-    fit_rms : float
-        Visit level RMS for the FIT
-
-    fit_num : int
-        Number of sources used to generate visit level FIT and `fit_rms`
+    imglist : list
+        List of input image NDData objects with metadata and source catalogs
 
     """
     # Specify matching algorithm to use
@@ -398,19 +394,17 @@ def match_default_fit(imglist, reference_catalog, print_fit_parameters=True):
                              tolerance=100, use2dhist=False)
     # Align images and correct WCS
     tweakwcs.tweak_image_wcs(imglist, reference_catalog, match=match)
+
     # Interpret RMS values from tweakwcs
     interpret_fit_rms(imglist, reference_catalog)
 
-    # determine the quality of the fit
-    fit_rms, fit_num  = determine_fit_quality(imglist, print_fit_parameters=print_fit_parameters)
-
-    return fit_rms, fit_num
+    return imglist
 
 
 # ----------------------------------------------------------------------------------------------------------------------
 
 
-def match_2dhist_fit(imglist, reference_catalog, print_fit_parameters=True):
+def match_2dhist_fit(imglist, reference_catalog):
     """Perform cross-matching and final fit using 2dHistogram matching
 
     Parameters
@@ -421,17 +415,10 @@ def match_2dhist_fit(imglist, reference_catalog, print_fit_parameters=True):
     reference_catalog : Table
         Astropy Table of reference sources for this field
 
-    print_fit_parameters : bool
-        Specify whether or not to print out FIT results for each chip
-
-
     Returns
     --------
-    fit_rms : float
-        Visit level RMS for the FIT
-
-    fit_num : int
-        Number of sources used to generate visit level FIT and `fit_rms`
+    imglist : list
+        List of input image NDData objects with metadata and source catalogs
 
     """
     print("-------------------- STEP 5b: (match_2dhist_fit) Cross matching and fitting --------------------")
@@ -440,13 +427,11 @@ def match_2dhist_fit(imglist, reference_catalog, print_fit_parameters=True):
                              tolerance=2.0, use2dhist=True)
     # Align images and correct WCS
     tweakwcs.tweak_image_wcs(imglist, reference_catalog, match=match)
+
     # Interpret RMS values from tweakwcs
     interpret_fit_rms(imglist, reference_catalog)
 
-    # determine the quality of the fit
-    fit_rms, fit_num  = determine_fit_quality(imglist, print_fit_parameters=print_fit_parameters)
-
-    return fit_rms, fit_num
+    return imglist
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -845,5 +830,5 @@ if __name__ == '__main__':
 
     # Get to it!
     return_value = perform_align(input_list,archive,clobber,update_hdr_wcs)
-    
+
     print(return_value)
