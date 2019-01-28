@@ -36,8 +36,7 @@ class TestRandomAlignMosaic(BaseHLATest):
 
     ref_loc = ['truth']
 
-    #@pytest.mark.xfail
-    #@pytest.mark.slow
+    @pytest.mark.skip
     def test_random_align(self):
         """ Wrapper to set up the test for aligning a large number of randomly
             selected fields (aka datasets) from a input ascii file (CSV)
