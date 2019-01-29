@@ -231,19 +231,30 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
 
     for imgname in extracted_sources.keys():
         table=extracted_sources[imgname]["catalog_table"]
+
+        # Get the location of the current image in the filtered table
+        index = np.where(filteredTable['imageName']==imgname)[0][0]
+
+        # First ensure sources were found
+        if table[1] == None:
+            print("No sources found in image {}".format(imgname))
+            filteredTable[index]['status'] = 1
+            return(filteredTable)
+            continue
+
         # The catalog of observable sources must have at least MIN_OBSERVABLE_THRESHOLD entries to be useful
         total_num_sources = 0
         for chipnum in table.keys():
             total_num_sources += len(table[chipnum])
 
         # Update filtered table with number of found sources
-        index = np.where(filteredTable['imageName']==imgname)[0][0]
         filteredTable[index]['foundSources'] = total_num_sources
 
         if total_num_sources < MIN_OBSERVABLE_THRESHOLD:
             print("Not enough sources ({}) found in image {}".format(total_num_sources,imgname))
             filteredTable[index]['status'] = 1
             return(filteredTable)
+
     print("\nSUCCESS")
     currentDT = datetime.datetime.now()
     deltaDT = (currentDT - startingDT).total_seconds()
