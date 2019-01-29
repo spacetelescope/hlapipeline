@@ -301,13 +301,14 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
                 #execute the correct fitting/matching algorithm
                 fit_rms, fit_num = algorithm_name(imglist, reference_catalog, print_fit_parameters=print_fit_parameters)
 
-                # update the best fit
+                # Potentially update the previously set best fit with improved values
                 if best_fit_rms >= 0.:
                     if fit_rms < best_fit_rms:
                         best_fit_rms = fit_rms
                         best_fit_num = fit_num
                         for item in imglist:
                             item.best_meta = item.meta.copy()
+                # If a reasonable fit has been found, this is the initial setting of the best_fit_xxx variables
                 else:
                     if fit_rms < MAX_FIT_LIMIT:
                         best_fit_rms = fit_rms
@@ -316,6 +317,16 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
                             item.best_meta = item.meta.copy()
                 #imglist_temp = imglist.copy() # preserve best fit solution so that it can be inserted into a reinitialized imglist next time through.
 
+                # If this is true, we are done so break out of the catalog loop (inner for loop)
+                # THIS AND THE NEXT BREAK ARE FIXES TO THE CURRENT LOGIC.  IT IS ASSUMED THESE
+                # FIXES WILL BECOME OBSOLETE ONCE THE ENHANCED LOGIC FOR CHOOSING THE BEST
+                # SOLUTION IS IMPLEMENTED.
+                if best_fit_rms > 0 and best_fit_rms < MAX_FIT_RMS:
+                    break
+
+            # If this is true, we are done so break out of the catalog loop (outer for loop)
+            if best_fit_rms > 0 and best_fit_rms < MAX_FIT_RMS:
+                break
 
     currentDT = datetime.datetime.now()
     deltaDT = (currentDT - startingDT).total_seconds()
