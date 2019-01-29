@@ -310,7 +310,7 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
                             item.best_meta = item.meta.copy()
                         best_fitStatusDict = fitStatusDict
                 #imglist_temp = imglist.copy() # preserve best fit solution so that it can be inserted into a reinitialized imglist next time through.
-
+                input("\a")
 
     currentDT = datetime.datetime.now()
     deltaDT = (currentDT - startingDT).total_seconds()
@@ -369,6 +369,7 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
     deltaDT = (currentDT - startingDT).total_seconds()
     print('Processing time of [STEP 7]: {} sec'.format(deltaDT))
     print('TOTAL Processing time of {} sec'.format((currentDT- zeroDT).total_seconds()))
+    print(best_fitStatusDict)
     return (filteredTable)
 
 
@@ -553,17 +554,17 @@ def determine_fit_quality(imglist, print_fit_parameters=True):
                     print("{} : {}".format(tweakwcs_info_key,item.meta['tweakwcs_info'][tweakwcs_info_key]))
             print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
         print("nmatchesCheck: {} radialOffsetCheck: {} largeRmsCheck: {} fitRmsCheck: {}".format(nmatchesCheck,radialOffsetCheck,largeRmsCheck,fitRmsCheck))
-    if (math.sqrt(np.std(np.asarray(xshifts)* 2) + np.std(np.asarray(xshifts)* 2)) <= imglist[0].meta['tweakwcs_info']['TOTAL_RMS']) / (imglist[0].wcs.pscale):
+    if not math.sqrt(np.std(np.asarray(xshifts))**2 + np.std(np.asarray(yshifts))**2) <= (imglist[0].meta['tweakwcs_info']['TOTAL_RMS']/1000.0) / (imglist[0].wcs.pscale):
         for dictKey in fitStatusDict:
             fitStatusDict[dictKey]['valid'] = False
             fitStatusDict[dictKey]['compromised'] = True
             fitStatusDict[dictKey]['reason'] = "Consistency violation!"
 
-    print(math.sqrt(np.std(np.asarray(xshifts) * 2) + np.std(np.asarray(xshifts) * 2)))
-    print((imglist[0].meta['tweakwcs_info']['TOTAL_RMS']) / (imglist[0].wcs.pscale))
-
-
+    print(math.sqrt(np.std(np.asarray(xshifts))**2 + np.std(np.asarray(yshifts))**2))
+    print((imglist[0].meta['tweakwcs_info']['TOTAL_RMS']/1000.0) / (imglist[0].wcs.pscale))
     for item in imglist: print(fitStatusDict["{},{}".format(item.meta['name'], item.meta['chip'])])
+    print("\a")
+    pdb.set_trace()
     if max_rms_val > MAX_FIT_RMS:
         print("Total fit RMS value = {} mas greater than the maximum threshold value {}.".format(max_rms_val, MAX_FIT_RMS))
         print("Try again with the next catalog")
