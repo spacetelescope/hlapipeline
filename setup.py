@@ -12,7 +12,7 @@ with open('HISTORY.rst') as history_file:
     history = history_file.read()
 
 requirements = ['Click>=6.0', 'astropy', 'scipy', 'matplotlib', \
-                'photutils', 'pyyaml', 'astroquery',\
+                'photutils', 'astroquery',\
                 'scipy', 'sphinx','sphinx_rtd_theme', \
                 'stsci_rtd_theme','stsci.tools',\
                 'stwcs','setuptools']
