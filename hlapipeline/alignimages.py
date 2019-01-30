@@ -240,7 +240,6 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
             print("No sources found in image {}".format(imgname))
             filteredTable[index]['status'] = 1
             return(filteredTable)
-            continue
 
         # The catalog of observable sources must have at least MIN_OBSERVABLE_THRESHOLD entries to be useful
         total_num_sources = 0
@@ -299,23 +298,29 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
                 print("------------------ Catalog {} matched using {} ------------------ ".format(catalogList[catalogIndex],algorithm_name.__name__))
 
                 #execute the correct fitting/matching algorithm
-                fit_rms, fit_num = algorithm_name(imglist, reference_catalog, print_fit_parameters=print_fit_parameters)
+                try:
+                    fit_rms, fit_num = algorithm_name(imglist, reference_catalog, print_fit_parameters=print_fit_parameters)
 
-                # Potentially update the previously set best fit with improved values
-                if best_fit_rms >= 0.:
-                    if fit_rms < best_fit_rms:
-                        best_fit_rms = fit_rms
-                        best_fit_num = fit_num
-                        for item in imglist:
-                            item.best_meta = item.meta.copy()
-                # If a reasonable fit has been found, this is the initial setting of the best_fit_xxx variables
-                else:
-                    if fit_rms < MAX_FIT_LIMIT:
-                        best_fit_rms = fit_rms
-                        best_fit_num = fit_num
-                        for item in imglist:
-                            item.best_meta = item.meta.copy()
-                #imglist_temp = imglist.copy() # preserve best fit solution so that it can be inserted into a reinitialized imglist next time through.
+                    # Potentially update the previously set best fit with improved values
+                    if best_fit_rms >= 0.:
+                        if fit_rms < best_fit_rms:
+                            best_fit_rms = fit_rms
+                            best_fit_num = fit_num
+                            for item in imglist:
+                                item.best_meta = item.meta.copy()
+                    # If a reasonable fit has been found, this is the initial setting of the best_fit_xxx variables
+                    else:
+                        if fit_rms < MAX_FIT_LIMIT:
+                            best_fit_rms = fit_rms
+                            best_fit_num = fit_num
+                            for item in imglist:
+                                item.best_meta = item.meta.copy()
+
+                except Exception:
+                    print("WARNING: Catastrophic fitting failure with catalog {} and matching algorithm {}.".format(catalogList[catalogIndex],algorithm_name.__name__))
+                    filteredTable['status'][:] = 1
+                    # It may be there are additional catalogs and algorithms to try, so keep going
+                    continue
 
                 # If this is true, we are done so break out of the catalog loop (inner for loop)
                 # THIS AND THE NEXT BREAK ARE FIXES TO THE CURRENT LOGIC.  IT IS ASSUMED THESE
@@ -327,6 +332,8 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
             # If this is true, we are done so break out of the catalog loop (outer for loop)
             if best_fit_rms > 0 and best_fit_rms < MAX_FIT_RMS:
                 break
+
+                #imglist_temp = imglist.copy() # preserve best fit solution so that it can be inserted into a reinitialized imglist next time through.
 
     currentDT = datetime.datetime.now()
     deltaDT = (currentDT - startingDT).total_seconds()
@@ -345,27 +352,28 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
             item.meta = item.best_meta.copy()
         filteredTable['status'][:] = 0
 
-    info_keys = OrderedDict(imglist[0].meta['tweakwcs_info']).keys()
-    # Update filtered table with number of matched sources and other information
-    for item in imglist:
-        imgname = item.meta['name']
-        index = np.where(filteredTable['imageName'] == imgname)[0][0]
+        # Protect the writing of the table within the best_fit_rms
+        info_keys = OrderedDict(imglist[0].meta['tweakwcs_info']).keys()
+        # Update filtered table with number of matched sources and other information
+        for item in imglist:
+            imgname = item.meta['name']
+            index = np.where(filteredTable['imageName'] == imgname)[0][0]
 
-        if item.meta['tweakwcs_info']['status'].startswith("FAILED") != True:
-            for tweakwcs_info_key in info_keys:
-                if not tweakwcs_info_key.startswith("matched"):
-                    if tweakwcs_info_key.lower() == 'rms':
-                        filteredTable[index]['rms_x'] = item.meta['tweakwcs_info'][tweakwcs_info_key][0]
-                        filteredTable[index]['rms_y'] = item.meta['tweakwcs_info'][tweakwcs_info_key][1]
+            if item.meta['tweakwcs_info']['status'].startswith("FAILED") != True:
+                for tweakwcs_info_key in info_keys:
+                    if not tweakwcs_info_key.startswith("matched"):
+                        if tweakwcs_info_key.lower() == 'rms':
+                            filteredTable[index]['rms_x'] = item.meta['tweakwcs_info'][tweakwcs_info_key][0]
+                            filteredTable[index]['rms_y'] = item.meta['tweakwcs_info'][tweakwcs_info_key][1]
 
-            filteredTable[index]['catalog'] = item.meta['tweakwcs_info']['catalog']
-            filteredTable[index]['catalogSources'] = len(reference_catalog)
-            filteredTable[index]['matchSources'] = item.meta['tweakwcs_info']['nmatches']
-            filteredTable[index]['rms_ra'] = item.meta['tweakwcs_info']['RMS_RA'].value
-            filteredTable[index]['rms_dec'] = item.meta['tweakwcs_info']['RMS_DEC'].value
-            filteredTable[index]['fit_rms'] = item.meta['tweakwcs_info']['FIT_RMS']
-            filteredTable[index]['total_rms'] = item.meta['tweakwcs_info']['TOTAL_RMS']
-            #filteredTable.pprint(max_width=-1)
+                filteredTable[index]['catalog'] = item.meta['tweakwcs_info']['catalog']
+                filteredTable[index]['catalogSources'] = len(reference_catalog)
+                filteredTable[index]['matchSources'] = item.meta['tweakwcs_info']['nmatches']
+                filteredTable[index]['rms_ra'] = item.meta['tweakwcs_info']['RMS_RA'].value
+                filteredTable[index]['rms_dec'] = item.meta['tweakwcs_info']['RMS_DEC'].value
+                filteredTable[index]['fit_rms'] = item.meta['tweakwcs_info']['FIT_RMS']
+                filteredTable[index]['total_rms'] = item.meta['tweakwcs_info']['TOTAL_RMS']
+                #filteredTable.pprint(max_width=-1)
 
     currentDT = datetime.datetime.now()
     deltaDT = (currentDT - startingDT).total_seconds()
