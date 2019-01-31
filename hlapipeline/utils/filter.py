@@ -93,6 +93,7 @@ def analyze_data(inputFileList, **kwargs):
     fgslock = None
     processMsg = None
     status = 9999
+    compromised = 0
     headerletFile = None
 
     fit_rms = -1.0
