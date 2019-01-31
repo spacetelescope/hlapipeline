@@ -391,9 +391,9 @@ def perform_align(input_list, archive=False, clobber=False, debug = True, update
         for item in imglist:
             item.meta = item.best_meta.copy()
         filteredTable['status'][:] = 0
+        fitStatusDict = best_fitStatusDict.copy()
 
     info_keys = OrderedDict(imglist[0].meta['tweakwcs_info']).keys()
-    # Update filtered table with number of matched sources and other information
     for item in imglist:
         imgname = item.meta['name']
         index = np.where(filteredTable['imageName'] == imgname)[0][0]
@@ -412,7 +412,23 @@ def perform_align(input_list, archive=False, clobber=False, debug = True, update
             filteredTable[index]['rms_dec'] = item.meta['tweakwcs_info']['RMS_DEC'].value
             filteredTable[index]['fit_rms'] = item.meta['tweakwcs_info']['FIT_RMS']
             filteredTable[index]['total_rms'] = item.meta['tweakwcs_info']['TOTAL_RMS']
-            #filteredTable.pprint(max_width=-1)
+            # populate filteredTable fields "status", "compromised" and
+            # "processMsg" with fitStatusDict fields "valid", "compromised"
+            # and "reason".
+            explicitDictKey ="{},{}".format(item.meta['name'], item.meta['chip'])
+            if fitStatusDict[explicitDictKey]['valid'] == True:
+                filteredTable[index]['status'] = 0
+            else:
+                filteredTable[index]['status'] = 1
+            if fitStatusDict[explicitDictKey]['compromised'] == False:
+                filteredTable['compromised'] = 0
+            else:
+                filteredTable['compromised'] = 1
+            if fitStatusDict[explicitDictKey]['reason'] != "":
+                filteredTable[index]['processMsg'] = fitStatusDict[explicitDictKey]['reason']
+
+
+            filteredTable.pprint(max_width=-1)
 
     currentDT = datetime.datetime.now()
     deltaDT = (currentDT - startingDT).total_seconds()
