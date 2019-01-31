@@ -132,8 +132,8 @@ def convert_string_tf_to_boolean(invalue):
 # ----------------------------------------------------------------------------------------------------------------------
 
 
-def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False, print_fit_parameters=True,
-                    print_git_info=False, debug = True):
+def perform_align(input_list, archive=False, clobber=False, debug = True, update_hdr_wcs=False,
+                  print_fit_parameters=True, print_git_info=False):
     """Main calling function.
 
     Parameters
@@ -287,6 +287,7 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
 
     best_fit_rms = -99999.0
     best_fitStatusDict={}
+    best_fitQual = 5
     fit_algorithm_list= [match_2dhist_fit,match_default_fit]
     for catalogIndex in range(0, len(catalogList)): #loop over astrometric catalog
         print("-------------------- STEP 5: Detect astrometric sources --------------------")
@@ -317,24 +318,63 @@ def perform_align(input_list, archive=False, clobber=False, update_hdr_wcs=False
                 # determine the quality of the fit
                 fit_rms, fit_num, fitStatusDict = determine_fit_quality(imglist, print_fit_parameters=print_fit_parameters)
 
-                # update the best fit
-                if best_fit_rms >= 0.:
-                    if fit_rms < best_fit_rms:
-                        best_fit_rms = fit_rms
-                        best_fit_num = fit_num
-                        for item in imglist:
-                            item.best_meta = item.meta.copy()
-                        best_fitStatusDict = fitStatusDict.copy()
+                #for now, generate overall valid and compromised values. Basically, if any of the entries for "valid" is False, treat the whole dataset as not valid. Same goes for compromised.
+                overall_valid = True
+                overall_comp = False
+                for dictKey in fitStatusDict:
+                    if fitStatusDict[dictKey]["valid"] == False:
+                        overall_valid = False
+                    if fitStatusDict[dictKey]["compromised"] == True:
+                        overall_comp = True
+
+                # update the best fit (NEW WAY)
+                # determine which fit quality category this latest fit falls into
+                if overall_valid == False:
+                    print("FIT SOLUTION REJECTED")
+                    fitQual = 5
                 else:
-                    if fit_rms < MAX_FIT_LIMIT:
+                    if overall_comp == False and fit_rms < 10.:
+                        print("Valid solution with RMS < 10 mas found!")
+                        fitQual = 1
+                    elif overall_comp == True and fit_rms < 10.:
+                        print("Valid but compromised solution with RMS < 10 mas found!")
+                        fitQual = 2
+                    elif overall_comp == False and fit_rms >= 10.:
+                        print("Valid solution with RMS >= 10 mas found!")
+                        fitQual = 3
+                    else:
+                        print("Valid but compromised solution with RMS >= 10 mas found!")
+                        fitQual = 4
+
+                    # Figure out which fit solution to go with based on fitQual value and maybe also total_rms
+                    if fitQual == 1: #valid, non-comprimised solution with total rms < 10 mas...go with this solution.
                         best_fit_rms = fit_rms
                         best_fit_num = fit_num
                         for item in imglist:
                             item.best_meta = item.meta.copy()
                         best_fitStatusDict = fitStatusDict.copy()
-                #imglist_temp = imglist.copy() # preserve best fit solution so that it can be inserted into a reinitialized imglist next time through.
+                        break
+                    elif fitQual < best_fitQual: # better solution found. keep looping but with the better solution as "best" for now.
+                        print("Better solution found!")
+                        best_fit_rms = fit_rms
+                        best_fit_num = fit_num
+                        for item in imglist:
+                            item.best_meta = item.meta.copy()
+                        best_fitStatusDict = fitStatusDict.copy()
+                        best_fitQual = fitQual
+                    elif fitQual == best_fitQual: # new solution same level of fitQual. Choose whichever one has the lowest total rms as "best" and keep looping.
+                        if best_fit_rms >= 0.:
+                            if fit_rms < best_fit_rms:
+                                best_fit_rms = fit_rms
+                                best_fit_num = fit_num
+                                for item in imglist:
+                                    item.best_meta = item.meta.copy()
+                                best_fitStatusDict = fitStatusDict.copy()
+                    else: # new solution has worse fitQual. discard and continue looping.
+                        continue
 
-
+        if fitQual == 1: #break out of outer astrometric catalog loop
+            break
     currentDT = datetime.datetime.now()
     deltaDT = (currentDT - startingDT).total_seconds()
     print('Processing time of [STEP 5b]: {} sec'.format(deltaDT))
@@ -920,7 +960,6 @@ if __name__ == '__main__':
                     'newly computed WCS information to image image headers and create headerlet files? Unless explicitly '
                     'set, the default is "False".')
     ARGS = PARSER.parse_args()
-
     # Build list of input images
     input_list = []
     for item in ARGS.raw_input_list:
