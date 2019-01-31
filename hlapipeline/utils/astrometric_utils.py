@@ -399,23 +399,39 @@ def extract_sources(img, **pars):
         imgarr = img
 
     bkg_estimator = MedianBackground()
-    bkg = Background2D(imgarr, (50, 50), filter_size=(3, 3),
-                       bkg_estimator=bkg_estimator)
-    bkg_rms = (5. * bkg.background_rms)
-    bkg_rms_mean = bkg.background.mean() + 5. * bkg_rms.std()
+    bkg = None
 
-    if threshold is None or threshold < 0.0:
-        default_threshold = bkg.background + bkg_rms
-        if threshold is not None and threshold < 0.0:
-            threshold = -1*threshold*default_threshold
-            print("{} based on {}".format(threshold.max(), default_threshold.max()))
-            bkg_rms_mean = threshold.max()
-        else:
-            threshold = default_threshold
-    else:
-        bkg_rms_mean = 3. * threshold
-    if bkg_rms_mean < 0:
-        bkg_rms_mean = 0.
+    exclude_percentiles = [10,25,50,75]
+    for percentile in exclude_percentiles:
+        try:
+            bkg = Background2D(imgarr, (50, 50), filter_size=(3, 3),
+                           bkg_estimator=bkg_estimator,
+                           exclude_percentile=percentile)
+            # If it succeeds, stop and use that value
+            bkg_rms = (5. * bkg.background_rms)
+            bkg_rms_mean = bkg.background.mean() + 5. * bkg_rms.std()
+            default_threshold = bkg.background + bkg_rms
+            if threshold is None or threshold < 0.0:
+                if threshold is not None and threshold < 0.0:
+                    threshold = -1*threshold*default_threshold
+                    print("{} based on {}".format(threshold.max(), default_threshold.max()))
+                    bkg_rms_mean = threshold.max()
+                else:
+                    threshold = default_threshold
+            else:
+                bkg_rms_mean = 3. * threshold
+            if bkg_rms_mean < 0:
+                bkg_rms_mean = 0.
+            break
+        except Exception:
+            bkg = None
+
+    # If Background2D does not work at all, define default scalar values for
+    # the background to be used in source identification
+    if bkg is None:
+        bkg_rms_mean = max(0.01, imgarr.min())
+        bkg_rms = bkg_rms_mean * 5
+
     sigma = fwhm * gaussian_fwhm_to_sigma
     kernel = Gaussian2DKernel(sigma, x_size=source_box, y_size=source_box)
     kernel.normalize()
