@@ -310,6 +310,7 @@ def perform_align(input_list, archive=False, clobber=False, debug = True, update
 
         if len(reference_catalog) < MIN_CATALOG_THRESHOLD:
             print("Not enough sources found in catalog " + catalogList[catalogIndex])
+            fitQual = 5
             if catalogIndex < len(catalogList) -1:
                 print("Try again with other catalog")
             else:
