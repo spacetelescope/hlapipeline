@@ -341,8 +341,11 @@ def perform_align(input_list, archive=False, clobber=False, debug = True, update
                     # update the best fit (NEW WAY)
                     # determine which fit quality category this latest fit falls into
                     if overall_valid == False:
-                        print("FIT SOLUTION REJECTED")
                         fitQual = 5
+                        print("FIT SOLUTION REJECTED")
+                        filteredTable['status'][:] = 1
+                        for ctr in range(0,len(filteredTable)):
+                            filteredTable[ctr]['processMsg'] = fitStatusDict[filteredTable[ctr]['imageName']+",1"]["reason"]
                     else:
                         if overall_comp == False and fit_rms < 10.:
                             print("Valid solution with RMS < 10 mas found!")
