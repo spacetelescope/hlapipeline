@@ -265,8 +265,8 @@ def perform_align(input_list, archive=False, clobber=False, debug = True, update
 
         if total_num_sources < MIN_OBSERVABLE_THRESHOLD:
             print("Not enough sources ({}) found in image {}".format(total_num_sources,imgname))
-            filteredTable[index]['status'] = 1
-            return(filteredTable) #TODO: Should this update the status of all images in filteredTable with the value 1? What about processMsg?
+            filteredTable[index]['status'] = 1 #TODO: Should this update the status of all images in filteredTable with the value 1? What about processMsg?
+            return(filteredTable)
     print("\nSUCCESS")
     currentDT = datetime.datetime.now()
     deltaDT = (currentDT - startingDT).total_seconds()
@@ -311,68 +311,75 @@ def perform_align(input_list, archive=False, clobber=False, debug = True, update
             print("-------------------- STEP 5b: Cross matching and fitting --------------------")
             for algorithm_name in fit_algorithm_list: #loop over fit algorithm type
                 print("------------------ Catalog {} matched using {} ------------------ ".format(catalogList[catalogIndex],algorithm_name.__name__))
+                try:
+                    #execute the correct fitting/matching algorithm
+                    imglist = algorithm_name(imglist, reference_catalog)
 
-                #execute the correct fitting/matching algorithm
-                imglist = algorithm_name(imglist, reference_catalog)
+                    # determine the quality of the fit
+                    fit_rms, fit_num, fitStatusDict = determine_fit_quality(imglist, print_fit_parameters=print_fit_parameters)
 
-                # determine the quality of the fit
-                fit_rms, fit_num, fitStatusDict = determine_fit_quality(imglist, print_fit_parameters=print_fit_parameters)
+                    #for now, generate overall valid and compromised values. Basically, if any of the entries for "valid" is False, treat the whole dataset as not valid. Same goes for compromised.
+                    overall_valid = True
+                    overall_comp = False
+                    for dictKey in fitStatusDict:
+                        if fitStatusDict[dictKey]["valid"] == False:
+                            overall_valid = False
+                        if fitStatusDict[dictKey]["compromised"] == True:
+                            overall_comp = True
 
-                #for now, generate overall valid and compromised values. Basically, if any of the entries for "valid" is False, treat the whole dataset as not valid. Same goes for compromised.
-                overall_valid = True
-                overall_comp = False
-                for dictKey in fitStatusDict:
-                    if fitStatusDict[dictKey]["valid"] == False:
-                        overall_valid = False
-                    if fitStatusDict[dictKey]["compromised"] == True:
-                        overall_comp = True
-
-                # update the best fit (NEW WAY)
-                # determine which fit quality category this latest fit falls into
-                if overall_valid == False:
-                    print("FIT SOLUTION REJECTED")
-                    fitQual = 5
-                else:
-                    if overall_comp == False and fit_rms < 10.:
-                        print("Valid solution with RMS < 10 mas found!")
-                        fitQual = 1
-                    elif overall_comp == True and fit_rms < 10.:
-                        print("Valid but compromised solution with RMS < 10 mas found!")
-                        fitQual = 2
-                    elif overall_comp == False and fit_rms >= 10.:
-                        print("Valid solution with RMS >= 10 mas found!")
-                        fitQual = 3
+                    # update the best fit (NEW WAY)
+                    # determine which fit quality category this latest fit falls into
+                    if overall_valid == False:
+                        print("FIT SOLUTION REJECTED")
+                        fitQual = 5
                     else:
-                        print("Valid but compromised solution with RMS >= 10 mas found!")
-                        fitQual = 4
+                        if overall_comp == False and fit_rms < 10.:
+                            print("Valid solution with RMS < 10 mas found!")
+                            fitQual = 1
+                        elif overall_comp == True and fit_rms < 10.:
+                            print("Valid but compromised solution with RMS < 10 mas found!")
+                            fitQual = 2
+                        elif overall_comp == False and fit_rms >= 10.:
+                            print("Valid solution with RMS >= 10 mas found!")
+                            fitQual = 3
+                        else:
+                            print("Valid but compromised solution with RMS >= 10 mas found!")
+                            fitQual = 4
 
-                    # Figure out which fit solution to go with based on fitQual value and maybe also total_rms
-                    if fitQual == 1: #valid, non-comprimised solution with total rms < 10 mas...go with this solution.
-                        best_fit_rms = fit_rms
-                        best_fit_num = fit_num
-                        for item in imglist:
-                            item.best_meta = item.meta.copy()
-                        best_fitStatusDict = fitStatusDict.copy()
-                        break
-                    elif fitQual < best_fitQual: # better solution found. keep looping but with the better solution as "best" for now.
-                        print("Better solution found!")
-                        best_fit_rms = fit_rms
-                        best_fit_num = fit_num
-                        for item in imglist:
-                            item.best_meta = item.meta.copy()
-                        best_fitStatusDict = fitStatusDict.copy()
-                        best_fitQual = fitQual
-                    elif fitQual == best_fitQual: # new solution same level of fitQual. Choose whichever one has the lowest total rms as "best" and keep looping.
-                        if best_fit_rms >= 0.:
-                            if fit_rms < best_fit_rms:
-                                best_fit_rms = fit_rms
-                                best_fit_num = fit_num
-                                for item in imglist:
-                                    item.best_meta = item.meta.copy()
-                                best_fitStatusDict = fitStatusDict.copy()
-                    else: # new solution has worse fitQual. discard and continue looping.
-                        continue
+                        # Figure out which fit solution to go with based on fitQual value and maybe also total_rms
+                        if fitQual == 1: #valid, non-comprimised solution with total rms < 10 mas...go with this solution.
+                            best_fit_rms = fit_rms
+                            best_fit_num = fit_num
+                            for item in imglist:
+                                item.best_meta = item.meta.copy()
+                            best_fitStatusDict = fitStatusDict.copy()
+                            break #break out of while loop
+                        elif fitQual < best_fitQual: # better solution found. keep looping but with the better solution as "best" for now.
+                            print("Better solution found!")
+                            best_fit_rms = fit_rms
+                            best_fit_num = fit_num
+                            for item in imglist:
+                                item.best_meta = item.meta.copy()
+                            best_fitStatusDict = fitStatusDict.copy()
+                            best_fitQual = fitQual
+                        elif fitQual == best_fitQual: # new solution same level of fitQual. Choose whichever one has the lowest total rms as "best" and keep looping.
+                            if best_fit_rms >= 0.:
+                                if fit_rms < best_fit_rms:
+                                    best_fit_rms = fit_rms
+                                    best_fit_num = fit_num
+                                    for item in imglist:
+                                        item.best_meta = item.meta.copy()
+                                    best_fitStatusDict = fitStatusDict.copy()
+                        else: # new solution has worse fitQual. discard and continue looping.
+                            continue
+                except Exception:
+                    print("WARNING: Catastrophic fitting failure with catalog {} and matching algorithm {}.".format(catalogList[catalogIndex],algorithm_name.__name__))
+                    filteredTable['status'][:] = 1
+                    # It may be there are additional catalogs and algorithms to try, so keep going
+                    continue
 
+                if fitQual == 1:  # break out of inner fit algorithm loop
+                    break
         if fitQual == 1: #break out of outer astrometric catalog loop
             break
     currentDT = datetime.datetime.now()
@@ -393,42 +400,44 @@ def perform_align(input_list, archive=False, clobber=False, debug = True, update
         filteredTable['status'][:] = 0
         fitStatusDict = best_fitStatusDict.copy()
 
-    info_keys = OrderedDict(imglist[0].meta['tweakwcs_info']).keys()
-    for item in imglist:
-        imgname = item.meta['name']
-        index = np.where(filteredTable['imageName'] == imgname)[0][0]
+        # Protect the writing of the table within the best_fit_rms
+        info_keys = OrderedDict(imglist[0].meta['tweakwcs_info']).keys()
+        # Update filtered table with number of matched sources and other information
+        for item in imglist:
+            imgname = item.meta['name']
+            index = np.where(filteredTable['imageName'] == imgname)[0][0]
 
-        if item.meta['tweakwcs_info']['status'].startswith("FAILED") != True:
-            for tweakwcs_info_key in info_keys:
-                if not tweakwcs_info_key.startswith("matched"):
-                    if tweakwcs_info_key.lower() == 'rms':
-                        filteredTable[index]['rms_x'] = item.meta['tweakwcs_info'][tweakwcs_info_key][0]
-                        filteredTable[index]['rms_y'] = item.meta['tweakwcs_info'][tweakwcs_info_key][1]
+            if item.meta['tweakwcs_info']['status'].startswith("FAILED") != True:
+                for tweakwcs_info_key in info_keys:
+                    if not tweakwcs_info_key.startswith("matched"):
+                        if tweakwcs_info_key.lower() == 'rms':
+                            filteredTable[index]['rms_x'] = item.meta['tweakwcs_info'][tweakwcs_info_key][0]
+                            filteredTable[index]['rms_y'] = item.meta['tweakwcs_info'][tweakwcs_info_key][1]
 
-            filteredTable[index]['catalog'] = item.meta['tweakwcs_info']['catalog']
-            filteredTable[index]['catalogSources'] = len(reference_catalog)
-            filteredTable[index]['matchSources'] = item.meta['tweakwcs_info']['nmatches']
-            filteredTable[index]['rms_ra'] = item.meta['tweakwcs_info']['RMS_RA'].value
-            filteredTable[index]['rms_dec'] = item.meta['tweakwcs_info']['RMS_DEC'].value
-            filteredTable[index]['fit_rms'] = item.meta['tweakwcs_info']['FIT_RMS']
-            filteredTable[index]['total_rms'] = item.meta['tweakwcs_info']['TOTAL_RMS']
-            # populate filteredTable fields "status", "compromised" and
-            # "processMsg" with fitStatusDict fields "valid", "compromised"
-            # and "reason".
-            explicitDictKey ="{},{}".format(item.meta['name'], item.meta['chip'])
-            if fitStatusDict[explicitDictKey]['valid'] == True:
-                filteredTable[index]['status'] = 0
-            else:
-                filteredTable[index]['status'] = 1
-            if fitStatusDict[explicitDictKey]['compromised'] == False:
-                filteredTable['compromised'] = 0
-            else:
-                filteredTable['compromised'] = 1
-            if fitStatusDict[explicitDictKey]['reason'] != "":
-                filteredTable[index]['processMsg'] = fitStatusDict[explicitDictKey]['reason']
+                filteredTable[index]['catalog'] = item.meta['tweakwcs_info']['catalog']
+                filteredTable[index]['catalogSources'] = len(reference_catalog)
+                filteredTable[index]['matchSources'] = item.meta['tweakwcs_info']['nmatches']
+                filteredTable[index]['rms_ra'] = item.meta['tweakwcs_info']['RMS_RA'].value
+                filteredTable[index]['rms_dec'] = item.meta['tweakwcs_info']['RMS_DEC'].value
+                filteredTable[index]['fit_rms'] = item.meta['tweakwcs_info']['FIT_RMS']
+                filteredTable[index]['total_rms'] = item.meta['tweakwcs_info']['TOTAL_RMS']
+                # populate filteredTable fields "status", "compromised" and
+                # "processMsg" with fitStatusDict fields "valid", "compromised"
+                # and "reason".
+                explicitDictKey ="{},{}".format(item.meta['name'], item.meta['chip'])
+                if fitStatusDict[explicitDictKey]['valid'] == True:
+                    filteredTable[index]['status'] = 0
+                else:
+                    filteredTable[index]['status'] = 1
+                if fitStatusDict[explicitDictKey]['compromised'] == False:
+                    filteredTable['compromised'] = 0
+                else:
+                    filteredTable['compromised'] = 1
+                if fitStatusDict[explicitDictKey]['reason'] != "":
+                    filteredTable[index]['processMsg'] = fitStatusDict[explicitDictKey]['reason']
 
 
-            filteredTable.pprint(max_width=-1)
+                filteredTable.pprint(max_width=-1)
 
     currentDT = datetime.datetime.now()
     deltaDT = (currentDT - startingDT).total_seconds()
