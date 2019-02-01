@@ -493,7 +493,7 @@ def match_default_fit(imglist, reference_catalog):
     match = tweakwcs.TPMatch(searchrad=250, separation=0.1,
                              tolerance=100, use2dhist=False)
     # Align images and correct WCS
-    tweakwcs.tweak_image_wcs(imglist, reference_catalog, match=match)
+    tweakwcs.tweak_image_wcs(imglist, reference_catalog, match=match, expand_refcat=False) #TODO: turn on 'expand_refcat' option in future development
 
     # Interpret RMS values from tweakwcs
     interpret_fit_rms(imglist, reference_catalog)
@@ -526,7 +526,7 @@ def match_2dhist_fit(imglist, reference_catalog):
     match = tweakwcs.TPMatch(searchrad=75, separation=0.1,
                              tolerance=2.0, use2dhist=True)
     # Align images and correct WCS
-    tweakwcs.tweak_image_wcs(imglist, reference_catalog, match=match)
+    tweakwcs.tweak_image_wcs(imglist, reference_catalog, match=match, expand_refcat=False) #TODO: turn on 'expand_refcat' option in future development
 
     # Interpret RMS values from tweakwcs
     interpret_fit_rms(imglist, reference_catalog)
