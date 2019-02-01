@@ -250,17 +250,24 @@ def perform_align(input_list, archive=False, clobber=False, debug = True, update
         extracted_sources = generate_source_catalogs(processList,
                                                      centering_mode='starfind',nlargest=MAX_SOURCES_PER_CHIP)
 
-
-
     for imgname in extracted_sources.keys():
         table=extracted_sources[imgname]["catalog_table"]
+
+        # Get the location of the current image in the filtered table
+        index = np.where(filteredTable['imageName']==imgname)[0][0]
+
+        # First ensure sources were found
+        if table[1] == None:
+            print("No sources found in image {}".format(imgname))
+            filteredTable[index]['status'] = 1
+            return(filteredTable)
+
         # The catalog of observable sources must have at least MIN_OBSERVABLE_THRESHOLD entries to be useful
         total_num_sources = 0
         for chipnum in table.keys():
             total_num_sources += len(table[chipnum])
 
         # Update filtered table with number of found sources
-        index = np.where(filteredTable['imageName']==imgname)[0][0]
         filteredTable[index]['foundSources'] = total_num_sources
 
         if total_num_sources < MIN_OBSERVABLE_THRESHOLD:
@@ -435,9 +442,6 @@ def perform_align(input_list, archive=False, clobber=False, debug = True, update
                     filteredTable['compromised'] = 1
                 if fitStatusDict[explicitDictKey]['reason'] != "":
                     filteredTable[index]['processMsg'] = fitStatusDict[explicitDictKey]['reason']
-
-
-                filteredTable.pprint(max_width=-1)
 
     currentDT = datetime.datetime.now()
     deltaDT = (currentDT - startingDT).total_seconds()
@@ -985,6 +989,7 @@ if __name__ == '__main__':
                     'newly computed WCS information to image image headers and create headerlet files? Unless explicitly '
                     'set, the default is "False".')
     ARGS = PARSER.parse_args()
+
     # Build list of input images
     input_list = []
     for item in ARGS.raw_input_list:
