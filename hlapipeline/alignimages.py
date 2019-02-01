@@ -266,7 +266,7 @@ def perform_align(input_list, archive=False, clobber=False, debug = True, update
         if total_num_sources < MIN_OBSERVABLE_THRESHOLD:
             print("Not enough sources ({}) found in image {}".format(total_num_sources,imgname))
             filteredTable[index]['status'] = 1
-            return(filteredTable)
+            return(filteredTable) #TODO: Should this update the status of all images in filteredTable with the value 1? What about processMsg?
     print("\nSUCCESS")
     currentDT = datetime.datetime.now()
     deltaDT = (currentDT - startingDT).total_seconds()
