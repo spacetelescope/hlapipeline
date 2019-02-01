@@ -259,7 +259,8 @@ def perform_align(input_list, archive=False, clobber=False, debug = True, update
         # First ensure sources were found
         if table[1] == None:
             print("No sources found in image {}".format(imgname))
-            filteredTable[index]['status'] = 1
+            filteredTable[:]['status'] = 1
+            filteredTable[:]['processMsg'] = "No sources found"
             return(filteredTable)
 
         # The catalog of observable sources must have at least MIN_OBSERVABLE_THRESHOLD entries to be useful
@@ -272,7 +273,8 @@ def perform_align(input_list, archive=False, clobber=False, debug = True, update
 
         if total_num_sources < MIN_OBSERVABLE_THRESHOLD:
             print("Not enough sources ({}) found in image {}".format(total_num_sources,imgname))
-            filteredTable[index]['status'] = 1 #TODO: Should this update the status of all images in filteredTable with the value 1? What about processMsg?
+            filteredTable[:]['status'] = 1
+            filteredTable[:]['processMsg'] = "Not enough sources"
             return(filteredTable)
     print("\nSUCCESS")
     currentDT = datetime.datetime.now()
@@ -313,6 +315,7 @@ def perform_align(input_list, archive=False, clobber=False, debug = True, update
             else:
                 print("ERROR! No astrometric sources found in any catalog. Exiting...") #bail out if not enough sources can be found any of the astrometric catalogs
                 filteredTable['status'][:] = 1
+                filteredTable['processMsg'][:] = "No sources found"
                 return (filteredTable)
         else:
             print("-------------------- STEP 5b: Cross matching and fitting --------------------")
@@ -382,6 +385,7 @@ def perform_align(input_list, archive=False, clobber=False, debug = True, update
                 except Exception:
                     print("WARNING: Catastrophic fitting failure with catalog {} and matching algorithm {}.".format(catalogList[catalogIndex],algorithm_name.__name__))
                     filteredTable['status'][:] = 1
+                    filteredTable['processMsg'][:] = "Fitting failure"
                     # It may be there are additional catalogs and algorithms to try, so keep going
                     continue
 
