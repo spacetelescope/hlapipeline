@@ -527,6 +527,11 @@ def determine_fit_quality(imglist,filteredTable, print_fit_parameters=True):
 
         These entries are added to the 'tweakwcs_info' dictionary.
 
+    filteredTable : object
+        Astropy Table object containing data pertaining to the associated dataset, including
+        the doProcess bool.  It is intended this table is updated by subsequent functions for
+        bookkeeping purposes.
+
     print_fit_parameters : bool
         Specify whether or not to print out FIT results for each chip
 
@@ -537,6 +542,18 @@ def determine_fit_quality(imglist,filteredTable, print_fit_parameters=True):
 
     num_xmatches: int
         The number of stars used in matching the data
+
+
+    fitQual : int
+        fit quality catagory:
+        1 = valid solution with rms < 10 mas;
+        2 = Valid but compromised solution with rms < 10 mas;
+        3 = Valid solution with RMS >= 10 mas;
+        4 = Valid but compromised solution with RMS >= 10 mas;
+        5 = Not valid solution
+
+    filteredTable : object
+        modified filteredTable objecgt
 
     fitStatusDict : dictionary
         Dictionary containing the following:
