@@ -274,7 +274,7 @@ def perform_align(input_list, archive=False, clobber=False, debug = True, update
         if total_num_sources < MIN_OBSERVABLE_THRESHOLD:
             print("Not enough sources ({}) found in image {}".format(total_num_sources,imgname))
             filteredTable[:]['status'] = 1
-            filteredTable[:]['processMsg'] = "Not enough sources"
+            filteredTable[:]['processMsg'] = "Not enough sources found"
             return(filteredTable)
     print("\nSUCCESS")
     currentDT = datetime.datetime.now()
@@ -316,7 +316,7 @@ def perform_align(input_list, archive=False, clobber=False, debug = True, update
             else:
                 print("ERROR! No astrometric sources found in any catalog. Exiting...") #bail out if not enough sources can be found any of the astrometric catalogs
                 filteredTable['status'][:] = 1
-                filteredTable['processMsg'][:] = "No sources found"
+                filteredTable['processMsg'][:] = "No astrometric sources found"
                 return (filteredTable)
         else:
             print("-------------------- STEP 5b: Cross matching and fitting --------------------")
