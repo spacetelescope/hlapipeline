@@ -327,40 +327,10 @@ def perform_align(input_list, archive=False, clobber=False, debug = True, update
                     imglist = algorithm_name(imglist, reference_catalog)
 
                     # determine the quality of the fit
-                    fit_rms, fit_num, fitStatusDict = determine_fit_quality(imglist, print_fit_parameters=print_fit_parameters)
+                    fit_rms, fit_num, fitQual, filteredTable, fitStatusDict = determine_fit_quality(imglist,filteredTable, print_fit_parameters=print_fit_parameters)
 
-                    #for now, generate overall valid and compromised values. Basically, if any of the entries for "valid" is False, treat the whole dataset as not valid. Same goes for compromised.
-                    overall_valid = True
-                    overall_comp = False
-                    for dictKey in fitStatusDict:
-                        if fitStatusDict[dictKey]["valid"] == False:
-                            overall_valid = False
-                        if fitStatusDict[dictKey]["compromised"] == True:
-                            overall_comp = True
-
-                    # update the best fit (NEW WAY)
-                    # determine which fit quality category this latest fit falls into
-                    if overall_valid == False:
-                        fitQual = 5
-                        print("FIT SOLUTION REJECTED")
-                        filteredTable['status'][:] = 1
-                        for ctr in range(0,len(filteredTable)):
-                            filteredTable[ctr]['processMsg'] = fitStatusDict[filteredTable[ctr]['imageName']+",1"]["reason"]
-                    else:
-                        if overall_comp == False and fit_rms < 10.:
-                            print("Valid solution with RMS < 10 mas found!")
-                            fitQual = 1
-                        elif overall_comp == True and fit_rms < 10.:
-                            print("Valid but compromised solution with RMS < 10 mas found!")
-                            fitQual = 2
-                        elif overall_comp == False and fit_rms >= 10.:
-                            print("Valid solution with RMS >= 10 mas found!")
-                            fitQual = 3
-                        else:
-                            print("Valid but compromised solution with RMS >= 10 mas found!")
-                            fitQual = 4
-
-                        # Figure out which fit solution to go with based on fitQual value and maybe also total_rms
+                    # Figure out which fit solution to go with based on fitQual value and maybe also total_rms
+                    if fitQual < 5:
                         if fitQual == 1: #valid, non-comprimised solution with total rms < 10 mas...go with this solution.
                             best_fit_rms = fit_rms
                             best_fit_num = fit_num
@@ -541,7 +511,7 @@ def match_2dhist_fit(imglist, reference_catalog):
 # ----------------------------------------------------------------------------------------------------------------------
 
 
-def determine_fit_quality(imglist, print_fit_parameters=True):
+def determine_fit_quality(imglist,filteredTable, print_fit_parameters=True):
     """Determine the quality of the fit to the data
 
     Parameters
@@ -583,6 +553,7 @@ def determine_fit_quality(imglist, print_fit_parameters=True):
     xshifts=[]
     yshifts=[]
     overall_valid = True
+    overall_comp = False
     for item in imglist:
         xshifts.append(item.meta['tweakwcs_info']['shift'][0])
         yshifts.append(item.meta['tweakwcs_info']['shift'][1])
@@ -656,8 +627,13 @@ def determine_fit_quality(imglist, print_fit_parameters=True):
             fitStatusDict[dictKey]['compromised'] = False
             fitStatusDict[dictKey]['reason'] = ""
 
+        # for now, generate overall valid and compromised values. Basically, if any of the entries for "valid" is False,
+        # treat the whole dataset as not valid. Same goes for compromised.
         if fitStatusDict[dictKey]['valid'] == False:
             overall_valid = False
+        if fitStatusDict[dictKey]['compromised'] == True:
+            overall_comp = True
+
         print('RESULTS FOR {} Chip {}: FIT_RMS = {} mas, TOTAL_RMS = {} mas, NUM =  {}'.format(image_name, item.meta['chip'], fit_rms_val, max_rms_val, num_xmatches))
         # print fit params to screen
         if print_fit_parameters:
@@ -671,6 +647,29 @@ def determine_fit_quality(imglist, print_fit_parameters=True):
             print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
             print("nmatchesCheck: {} radialOffsetCheck: {} largeRmsCheck: {}, consistencyCheck: {}".format(nmatchesCheck,radialOffsetCheck,largeRmsCheck,consistencyCheck))
 
+
+
+    # determine which fit quality category this latest fit falls into
+    if overall_valid == False:
+        fitQual = 5
+        print("FIT SOLUTION REJECTED")
+        filteredTable['status'][:] = 1
+        for ctr in range(0, len(filteredTable)):
+            filteredTable[ctr]['processMsg'] = fitStatusDict[filteredTable[ctr]['imageName'] + ",1"]["reason"]
+    else:
+        if overall_comp == False and max_rms_val < 10.:
+            print("Valid solution with RMS < 10 mas found!")
+            fitQual = 1
+        elif overall_comp == True and max_rms_val < 10.:
+            print("Valid but compromised solution with RMS < 10 mas found!")
+            fitQual = 2
+        elif overall_comp == False and max_rms_val >= 10.:
+            print("Valid solution with RMS >= 10 mas found!")
+            fitQual = 3
+        else:
+            print("Valid but compromised solution with RMS >= 10 mas found!")
+            fitQual = 4
+
     if print_fit_parameters:
         for item in imglist: print(fitStatusDict["{},{}".format(item.meta['name'], item.meta['chip'])])
 
@@ -682,7 +681,7 @@ def determine_fit_quality(imglist, print_fit_parameters=True):
         print("Try again with the next catalog")
     else:
         print("Fit calculations successful.")
-    return max_rms_val, num_xmatches, fitStatusDict
+    return max_rms_val, num_xmatches, fitQual, filteredTable, fitStatusDict
 
 
 # ----------------------------------------------------------------------------------------------------------------------
