@@ -82,12 +82,14 @@ def check_and_get_data(input_list,**pars):
         list of full filenames
 
     """
-    totalInputList=[]
+    totalInputList = []
+    retrieve_list = [] # list of already retrieved ASNs, only request each once
     for input_item in input_list:
         filelist = aqutils.retrieve_observation(input_item,**pars)
         if len(filelist) == 0:
             # look for local copy of the file
-            fitsfilenames = sorted(glob.glob("{}_fl?.fits".format(input_item)))
+            input_rootname = input_item[:input_item.find('_')]
+            fitsfilenames = sorted(glob.glob("{}_fl?.fits".format(input_rootname)))
             if len(fitsfilenames) > 0:
                 imghdu = fits.open(fitsfilenames[0])
                 imgprimaryheader = imghdu[0].header
@@ -97,8 +99,10 @@ def check_and_get_data(input_list,**pars):
                         asnid = None
                 except KeyError:
                     asnid = None
-                if asnid:
+                if asnid and asnid not in retrieve_list:
                     filelist = aqutils.retrieve_observation(asnid,**pars)
+                    retrieve_list.append(asnid) # record asn's already retrieved
+
         if len(filelist) > 0:
             totalInputList += filelist
 
