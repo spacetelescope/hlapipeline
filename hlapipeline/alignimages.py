@@ -137,7 +137,7 @@ def convert_string_tf_to_boolean(invalue):
 
 
 def perform_align(input_list, archive=False, clobber=False, debug = True, update_hdr_wcs=False,
-                  print_fit_parameters=True, print_git_info=False):
+                  print_fit_parameters=True, print_git_info=True, output=True):
     """Main calling function.
 
     Parameters
@@ -164,6 +164,10 @@ def perform_align(input_list, archive=False, clobber=False, debug = True, update
 
     print_git_info : Boolean
         Display git repository information?
+
+    output : Boolean
+        Should utils.astrometric_utils.create_astrometric_catalog() genrate file "ref_cat.ecsv" and should
+        generate_source_catalogs() generate the .reg region files for every chip of every input image?
 
     Returns
     -------
@@ -245,14 +249,14 @@ def perform_align(input_list, archive=False, clobber=False, debug = True, update
                 pickle_filename))
         else:
             extracted_sources = generate_source_catalogs(processList,
-                                                         centering_mode='starfind',nlargest=MAX_SOURCES_PER_CHIP)
+                                                         centering_mode='starfind',nlargest=MAX_SOURCES_PER_CHIP,output=output)
             pickle_out = open(pickle_filename, "wb")
             pickle.dump(extracted_sources, pickle_out)
             pickle_out.close()
             print("Wrote ", pickle_filename)
     else:
         extracted_sources = generate_source_catalogs(processList,
-                                                     centering_mode='starfind',nlargest=MAX_SOURCES_PER_CHIP)
+                                                     centering_mode='starfind',nlargest=MAX_SOURCES_PER_CHIP,output=output)
 
     for imgname in extracted_sources.keys():
         table=extracted_sources[imgname]["catalog_table"]
@@ -305,7 +309,7 @@ def perform_align(input_list, archive=False, clobber=False, debug = True, update
     for catalogIndex in range(0, len(catalogList)): #loop over astrometric catalog
         print("-------------------- STEP 5: Detect astrometric sources --------------------")
         print("Astrometric Catalog: ",catalogList[catalogIndex])
-        reference_catalog = generate_astrometric_catalog(processList, catalog=catalogList[catalogIndex])
+        reference_catalog = generate_astrometric_catalog(processList, catalog=catalogList[catalogIndex], output=output)
 
         currentDT = datetime.datetime.now()
         deltaDT = (currentDT - startingDT).total_seconds()
@@ -724,8 +728,13 @@ def generate_astrometric_catalog(imglist, **pars):
 
     """
     # generate catalog
+    temp_pars = pars.copy()
+    if pars['output'] == True:
+        pars['output'] = 'ref_cat.ecsv'
+    else:
+        pars['output'] = None
     out_catalog = amutils.create_astrometric_catalog(imglist,**pars)
-
+    pars = temp_pars.copy()
     # if the catalog has contents, write the catalog to ascii text file
     if len(out_catalog) > 0:
         catalog_filename = "refcatalog.cat"
