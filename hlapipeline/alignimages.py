@@ -136,8 +136,8 @@ def convert_string_tf_to_boolean(invalue):
 # ----------------------------------------------------------------------------------------------------------------------
 
 
-def perform_align(input_list, archive=False, clobber=False, debug = True, update_hdr_wcs=False,
-                  print_fit_parameters=True, print_git_info=True, output=True):
+def perform_align(input_list, archive=False, clobber=False, debug=True, update_hdr_wcs=False,
+                  print_fit_parameters=True, print_git_info=False, output=True): # TODO: set 'debug' and 'output' back to 'False' before release.
     """Main calling function.
 
     Parameters
@@ -1025,6 +1025,19 @@ if __name__ == '__main__':
     PARSER.add_argument( '-u', '--update_hdr_wcs', required=False,choices=['True','False'],default='False',help='Write '
                     'newly computed WCS information to image image headers and create headerlet files? Unless explicitly '
                     'set, the default is "False".')
+
+    PARSER.add_argument( '-p', '--print_fit_parameters', required=False,choices=['True','False'],default='True',help=''
+                    'Specify whether or not to print out FIT results for each chip. Unless explicitly set, the default '
+                    'is "True".')
+
+    PARSER.add_argument( '-g', '--print_git_info', required=False,choices=['True','False'],default='False',help='Display '
+                    'git repository information? Unless explicitly set, the default is "False".')
+
+    PARSER.add_argument( '-o', '--output', required=False,choices=['True','False'],default='False',help='Should '
+                    'utils.astrometric_utils.create_astrometric_catalog() generate file "ref_cat.ecsv" and should '
+                    'generate_source_catalogs() generate the .reg region files for every chip of every input image? '
+                    'Unless explicitly set, the default is "False".')
+
     ARGS = PARSER.parse_args()
 
     # Build list of input images
@@ -1038,6 +1051,7 @@ if __name__ == '__main__':
         else:
             input_list.append(item)
 
+    # Convert input args from text strings to Boolean True/False values
     archive = convert_string_tf_to_boolean(ARGS.archive)
 
     clobber = convert_string_tf_to_boolean(ARGS.clobber)
@@ -1046,7 +1060,13 @@ if __name__ == '__main__':
 
     update_hdr_wcs = convert_string_tf_to_boolean(ARGS.update_hdr_wcs)
 
+    print_fit_parameters = convert_string_tf_to_boolean(ARGS.print_fit_parameters)
+
+    print_git_info = convert_string_tf_to_boolean(ARGS.print_git_info)
+
+    output = convert_string_tf_to_boolean(ARGS.output)
+
     # Get to it!
-    return_value = perform_align(input_list,archive,clobber,debug,update_hdr_wcs)
+    return_value = perform_align(input_list,archive,clobber,debug,update_hdr_wcs,print_fit_parameters,print_git_info)
 
     print(return_value)
