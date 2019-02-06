@@ -166,8 +166,9 @@ def perform_align(input_list, archive=False, clobber=False, debug=True, update_h
         Display git repository information?
 
     output : Boolean
-        Should utils.astrometric_utils.create_astrometric_catalog() generate file "ref_cat.ecsv" and should
-        generate_source_catalogs() generate the .reg region files for every chip of every input image?
+        Should utils.astrometric_utils.create_astrometric_catalog() generate file 'ref_cat.ecsv' and should
+        generate_source_catalogs() generate the .reg region files for every chip of every input image and should
+        generate_astrometric_catalog() generate file 'refcatalog.cat'?
 
     Returns
     -------
@@ -735,8 +736,8 @@ def generate_astrometric_catalog(imglist, **pars):
         pars['output'] = None
     out_catalog = amutils.create_astrometric_catalog(imglist,**pars)
     pars = temp_pars.copy()
-    # if the catalog has contents, write the catalog to ascii text file
-    if len(out_catalog) > 0:
+    #if the catalog has contents, write the catalog to ascii text file
+    if len(out_catalog) > 0 and pars['output']:
         catalog_filename = "refcatalog.cat"
         out_catalog.write(catalog_filename, format="ascii.fast_commented_header")
         print("Wrote reference catalog {}.".format(catalog_filename))
@@ -1035,8 +1036,10 @@ if __name__ == '__main__':
 
     PARSER.add_argument( '-o', '--output', required=False,choices=['True','False'],default='False',help='Should '
                     'utils.astrometric_utils.create_astrometric_catalog() generate file "ref_cat.ecsv" and should '
-                    'generate_source_catalogs() generate the .reg region files for every chip of every input image? '
-                    'Unless explicitly set, the default is "False".')
+                    'generate_source_catalogs() generate the .reg region files for every chip of every input image and '
+                    'should generate_astrometric_catalog() generate file "refcatalog.cat"? Unless explicitly set, the '
+                    'default is "False".')
+    'Should the code generate '
 
     ARGS = PARSER.parse_args()
 
