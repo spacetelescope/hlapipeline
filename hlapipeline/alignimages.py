@@ -166,7 +166,7 @@ def perform_align(input_list, archive=False, clobber=False, debug=True, update_h
         Display git repository information?
 
     output : Boolean
-        Should utils.astrometric_utils.create_astrometric_catalog() genrate file "ref_cat.ecsv" and should
+        Should utils.astrometric_utils.create_astrometric_catalog() generate file "ref_cat.ecsv" and should
         generate_source_catalogs() generate the .reg region files for every chip of every input image?
 
     Returns
