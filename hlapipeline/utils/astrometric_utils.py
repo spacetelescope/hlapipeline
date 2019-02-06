@@ -201,7 +201,7 @@ def create_astrometric_catalog(inputs, **pars):
     # Write out table to a file, if specified
     if output:
         ref_table.write(output, format=table_format)
-    print("Created catalog '{}' with {} sources".format(output, num_sources))
+        print("Created catalog '{}' with {} sources".format(output, num_sources))
 
     return ref_table
 

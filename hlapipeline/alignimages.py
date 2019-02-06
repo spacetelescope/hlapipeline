@@ -136,8 +136,8 @@ def convert_string_tf_to_boolean(invalue):
 # ----------------------------------------------------------------------------------------------------------------------
 
 
-def perform_align(input_list, archive=False, clobber=False, debug = True, update_hdr_wcs=False,
-                  print_fit_parameters=True, print_git_info=False):
+def perform_align(input_list, archive=False, clobber=False, debug=True, update_hdr_wcs=False,
+                  print_fit_parameters=True, print_git_info=False, output=True): # TODO: set 'debug' and 'output' back to 'False' before release.
     """Main calling function.
 
     Parameters
@@ -164,6 +164,11 @@ def perform_align(input_list, archive=False, clobber=False, debug = True, update
 
     print_git_info : Boolean
         Display git repository information?
+
+    output : Boolean
+        Should utils.astrometric_utils.create_astrometric_catalog() generate file 'ref_cat.ecsv' and should
+        generate_source_catalogs() generate the .reg region files for every chip of every input image and should
+        generate_astrometric_catalog() generate file 'refcatalog.cat'?
 
     Returns
     -------
@@ -245,14 +250,14 @@ def perform_align(input_list, archive=False, clobber=False, debug = True, update
                 pickle_filename))
         else:
             extracted_sources = generate_source_catalogs(processList,
-                                                         centering_mode='starfind',nlargest=MAX_SOURCES_PER_CHIP)
+                                                         centering_mode='starfind',nlargest=MAX_SOURCES_PER_CHIP,output=output)
             pickle_out = open(pickle_filename, "wb")
             pickle.dump(extracted_sources, pickle_out)
             pickle_out.close()
             print("Wrote ", pickle_filename)
     else:
         extracted_sources = generate_source_catalogs(processList,
-                                                     centering_mode='starfind',nlargest=MAX_SOURCES_PER_CHIP)
+                                                     centering_mode='starfind',nlargest=MAX_SOURCES_PER_CHIP,output=output)
 
     for imgname in extracted_sources.keys():
         table=extracted_sources[imgname]["catalog_table"]
@@ -305,7 +310,7 @@ def perform_align(input_list, archive=False, clobber=False, debug = True, update
     for catalogIndex in range(0, len(catalogList)): #loop over astrometric catalog
         print("-------------------- STEP 5: Detect astrometric sources --------------------")
         print("Astrometric Catalog: ",catalogList[catalogIndex])
-        reference_catalog = generate_astrometric_catalog(processList, catalog=catalogList[catalogIndex])
+        reference_catalog = generate_astrometric_catalog(processList, catalog=catalogList[catalogIndex], output=output)
 
         currentDT = datetime.datetime.now()
         deltaDT = (currentDT - startingDT).total_seconds()
@@ -724,10 +729,15 @@ def generate_astrometric_catalog(imglist, **pars):
 
     """
     # generate catalog
+    temp_pars = pars.copy()
+    if pars['output'] == True:
+        pars['output'] = 'ref_cat.ecsv'
+    else:
+        pars['output'] = None
     out_catalog = amutils.create_astrometric_catalog(imglist,**pars)
-
-    # if the catalog has contents, write the catalog to ascii text file
-    if len(out_catalog) > 0:
+    pars = temp_pars.copy()
+    #if the catalog has contents, write the catalog to ascii text file
+    if len(out_catalog) > 0 and pars['output']:
         catalog_filename = "refcatalog.cat"
         out_catalog.write(catalog_filename, format="ascii.fast_commented_header")
         print("Wrote reference catalog {}.".format(catalog_filename))
@@ -1016,6 +1026,21 @@ if __name__ == '__main__':
     PARSER.add_argument( '-u', '--update_hdr_wcs', required=False,choices=['True','False'],default='False',help='Write '
                     'newly computed WCS information to image image headers and create headerlet files? Unless explicitly '
                     'set, the default is "False".')
+
+    PARSER.add_argument( '-p', '--print_fit_parameters', required=False,choices=['True','False'],default='True',help=''
+                    'Specify whether or not to print out FIT results for each chip. Unless explicitly set, the default '
+                    'is "True".')
+
+    PARSER.add_argument( '-g', '--print_git_info', required=False,choices=['True','False'],default='False',help='Display '
+                    'git repository information? Unless explicitly set, the default is "False".')
+
+    PARSER.add_argument( '-o', '--output', required=False,choices=['True','False'],default='False',help='Should '
+                    'utils.astrometric_utils.create_astrometric_catalog() generate file "ref_cat.ecsv" and should '
+                    'generate_source_catalogs() generate the .reg region files for every chip of every input image and '
+                    'should generate_astrometric_catalog() generate file "refcatalog.cat"? Unless explicitly set, the '
+                    'default is "False".')
+    'Should the code generate '
+
     ARGS = PARSER.parse_args()
 
     # Build list of input images
@@ -1029,6 +1054,7 @@ if __name__ == '__main__':
         else:
             input_list.append(item)
 
+    # Convert input args from text strings to Boolean True/False values
     archive = convert_string_tf_to_boolean(ARGS.archive)
 
     clobber = convert_string_tf_to_boolean(ARGS.clobber)
@@ -1037,7 +1063,13 @@ if __name__ == '__main__':
 
     update_hdr_wcs = convert_string_tf_to_boolean(ARGS.update_hdr_wcs)
 
+    print_fit_parameters = convert_string_tf_to_boolean(ARGS.print_fit_parameters)
+
+    print_git_info = convert_string_tf_to_boolean(ARGS.print_git_info)
+
+    output = convert_string_tf_to_boolean(ARGS.output)
+
     # Get to it!
-    return_value = perform_align(input_list,archive,clobber,debug,update_hdr_wcs)
+    return_value = perform_align(input_list,archive,clobber,debug,update_hdr_wcs,print_fit_parameters,print_git_info)
 
     print(return_value)
